@@ -36,7 +36,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
 | C: 空间 | 约 2.54GB 空闲 |
 | 客户端包 | `D:\新启动器\dist\CMUmcl-step3.zip`（35 entries） |
-| 自包含包 | `D:\新启动器\dist\CMUmcl-win-x64-selfcontained.zip`（57.8MB，261 entries）；隔离 .NET 环境独立启动 MainWindow 通过 |
+| 自包含包 | `D:\新启动器\dist\CMUmcl-win-x64-forge-selfcontained.zip`（60.6MB，261 entries，含 Forge）；隔离 .NET 环境独立启动 MainWindow 通过；旧的非 Forge 包仍保留 |
 | Forge | 1.20.1 + 47.4.28；`forge-test` 安装/启动/跳过/损坏修复通过；universal SHA-1 `1c2208dc…` |
 | 服务端 | 签名 manifest + 管理后台可用；`CSUxYSU union server` 已上传 revision 1 |
 | 备份 | 加固备份 `backups\PCL-CMU-server-backup-20261028-1541.tar.gz` |
@@ -45,7 +45,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 
 - 客户端：`D:\新启动器\CMUmcl`
 - 可执行文件：`CMUmcl\bin\Debug\net10.0-windows\CMUmcl.exe`（framework-dependent）
-- 自包含目录：`D:\新启动器\dist\CMUmcl-win-x64`；自包含 zip：`D:\新启动器\dist\CMUmcl-win-x64-selfcontained.zip`
+- 自包含目录：`D:\新启动器\dist\CMUmcl-win-x64-forge`；自包含 zip：`D:\新启动器\dist\CMUmcl-win-x64-forge-selfcontained.zip`
 - Forge 源码包：`D:\新启动器\dist\CMUmcl-step4-source.zip`（含 LICENSE/NOTICE）
 - 规格：`docs\superpowers\specs\2026-10-28-java-version-selection-design.md`
 - 计划：`docs\superpowers\plans\2026-10-28-java-version-selection-plan.md`
