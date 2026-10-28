@@ -27,6 +27,14 @@ namespace CMUmcl.Launch.Forge
         private const string ForgeMavenRoot = "https://maven.minecraftforge.net";
         private const string UserAgent = "CMUmcl/0.1.0";
 
+        private const int MaxAttempts = 3;
+
+        private static readonly TimeSpan[] RetryDelays =
+        {
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+        };
+
         private static readonly HashSet<string> AllowedHosts = new(StringComparer.OrdinalIgnoreCase)
         {
             "maven.minecraftforge.net",
@@ -62,6 +70,20 @@ namespace CMUmcl.Launch.Forge
         {
             if (uri == null || uri.Scheme != Uri.UriSchemeHttps || !AllowedHosts.Contains(uri.Host))
                 throw new LaunchException("Forge 下载被重定向到不允许的主机，已中止。");
+        }
+
+        /// <summary>
+        /// True when the HTTP status code indicates a transient failure worth retrying:
+        /// 408 (request timeout), 429 (rate limited), or a server error (500/502/503/504).
+        /// </summary>
+        public static bool IsRetryableStatus(int statusCode)
+        {
+            return statusCode == 408
+                || statusCode == 429
+                || statusCode == 500
+                || statusCode == 502
+                || statusCode == 503
+                || statusCode == 504;
         }
 
         public async Task<string> InstallAsync(
@@ -210,21 +232,27 @@ namespace CMUmcl.Launch.Forge
 
         private async Task<string> DownloadInstallerSha1Async(string sha1Url, CancellationToken ct)
         {
-            if (!IsAllowedUrl(sha1Url))
-                throw new LaunchException("下载 Forge 安装器失败（.sha1 地址不在允许的主机列表内），已中止。");
+            return await WithRetryAsync(async () =>
+            {
+                if (!IsAllowedUrl(sha1Url))
+                    throw new LaunchException("下载 Forge 安装器失败（.sha1 地址不在允许的主机列表内），已中止。");
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, sha1Url);
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
-            EnsureAllowedUri(response.RequestMessage?.RequestUri);
-            if (!response.IsSuccessStatusCode)
-                throw new LaunchException($"下载 Forge 安装器失败（.sha1 缺失，HTTP {(int)response.StatusCode}），已中止。");
+                using var request = new HttpRequestMessage(HttpMethod.Get, sha1Url);
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+                EnsureAllowedUri(response.RequestMessage?.RequestUri);
 
-            string text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            string hash = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-            if (hash.Length != 40 || hash.Any(c => !Uri.IsHexDigit(c)))
-                throw new LaunchException("下载 Forge 安装器失败（.sha1 内容非法），已中止。");
+                if (IsRetryableStatus((int)response.StatusCode))
+                    throw new RetryableHttpException((int)response.StatusCode);
+                if (!response.IsSuccessStatusCode)
+                    throw new LaunchException($"下载 Forge 安装器失败（.sha1 缺失，HTTP {(int)response.StatusCode}），已中止。");
 
-            return hash.ToLowerInvariant();
+                string text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                string hash = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                if (hash.Length != 40 || hash.Any(c => !Uri.IsHexDigit(c)))
+                    throw new LaunchException("下载 Forge 安装器失败（.sha1 内容非法），已中止。");
+
+                return hash.ToLowerInvariant();
+            }, Sha1DownloadError, ct).ConfigureAwait(false);
         }
 
         private async Task InstallLibrariesAsync(List<ForgeLibrary> libraries, string librariesDir, IProgress<LaunchProgress>? progress, CancellationToken ct)
@@ -260,36 +288,109 @@ namespace CMUmcl.Launch.Forge
 
         private async Task DownloadToFileAsync(string url, string targetPath, long expectedSize, string expectedSha1, string failureMessage, CancellationToken ct)
         {
-            if (!IsAllowedUrl(url))
-                throw new LaunchException(failureMessage);
-
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            EnsureAllowedUri(response.RequestMessage?.RequestUri);
-            if (!response.IsSuccessStatusCode)
-                throw new LaunchException(failureMessage);
-
-            using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-            await using var content = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-
-            var buffer = new byte[81920];
-            long total = 0;
-            int read;
-            while ((read = await content.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+            await WithRetryAsync(async () =>
             {
-                sha1.AppendData(buffer, 0, read);
-                await fs.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                total += read;
+                if (!IsAllowedUrl(url))
+                    throw new LaunchException(failureMessage);
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                EnsureAllowedUri(response.RequestMessage?.RequestUri);
+
+                if (IsRetryableStatus((int)response.StatusCode))
+                    throw new RetryableHttpException((int)response.StatusCode);
+                if (!response.IsSuccessStatusCode)
+                    throw new LaunchException(failureMessage);
+
+                using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+                await using var content = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = await content.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                {
+                    sha1.AppendData(buffer, 0, read);
+                    await fs.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                    total += read;
+                }
+
+                string actual = Convert.ToHexString(sha1.GetHashAndReset()).ToLowerInvariant();
+                bool sizeOk = expectedSize <= 0 || total == expectedSize;
+                bool sha1Ok = string.IsNullOrWhiteSpace(expectedSha1)
+                    || string.Equals(actual, expectedSha1.Trim().ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
+
+                if (!sizeOk || !sha1Ok)
+                    throw new LaunchException(failureMessage);
+
+                return true;
+            }, ex => FileDownloadError(ex, failureMessage), ct).ConfigureAwait(false);
+        }
+
+        // ------------------------------------------------------------------
+        // 有界重试（Forge 专属，独立于 MojangRuntimeInstaller）
+        // ------------------------------------------------------------------
+
+        private static bool IsTransient(Exception ex, CancellationToken ct)
+        {
+            return ex is HttpRequestException
+                || ex is IOException
+                || ex is RetryableHttpException
+                || (ex is TaskCanceledException && !ct.IsCancellationRequested);
+        }
+
+        private static TimeSpan RetryDelayFor(int attempt)
+            => attempt - 1 < RetryDelays.Length ? RetryDelays[attempt - 1] : RetryDelays[^1];
+
+        private static LaunchException Sha1DownloadError(Exception ex) => ex switch
+        {
+            RetryableHttpException h => new LaunchException($"下载 Forge 安装器失败（.sha1 缺失，HTTP {h.StatusCode}），已中止。", ex),
+            TaskCanceledException => new LaunchException("下载 Forge 安装器失败（.sha1 下载超时），已中止。", ex),
+            _ => new LaunchException("下载 Forge 安装器失败（.sha1 网络错误），已中止。", ex),
+        };
+
+        private static LaunchException FileDownloadError(Exception ex, string failureMessage)
+        {
+            string reason = ex switch
+            {
+                RetryableHttpException h => $"HTTP {h.StatusCode}",
+                TaskCanceledException => "下载超时",
+                _ => "网络错误",
+            };
+            return new LaunchException($"{failureMessage.TrimEnd('。')}（{reason}）。", ex);
+        }
+
+        private static async Task<T> WithRetryAsync<T>(
+            Func<Task<T>> operation,
+            Func<Exception, LaunchException> finalError,
+            CancellationToken ct)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await operation().ConfigureAwait(false);
+                }
+                catch (Exception ex) when (attempt < MaxAttempts && IsTransient(ex, ct))
+                {
+                    await Task.Delay(RetryDelayFor(attempt), ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (IsTransient(ex, ct))
+                {
+                    throw finalError(ex);
+                }
+            }
+        }
+
+        private sealed class RetryableHttpException : Exception
+        {
+            public RetryableHttpException(int statusCode) : base($"HTTP {statusCode}")
+            {
+                StatusCode = statusCode;
             }
 
-            string actual = Convert.ToHexString(sha1.GetHashAndReset()).ToLowerInvariant();
-            bool sizeOk = expectedSize <= 0 || total == expectedSize;
-            bool sha1Ok = string.IsNullOrWhiteSpace(expectedSha1)
-                || string.Equals(actual, expectedSha1.Trim().ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
-
-            if (!sizeOk || !sha1Ok)
-                throw new LaunchException(failureMessage);
+            public int StatusCode { get; }
         }
 
         // ------------------------------------------------------------------

@@ -30,7 +30,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
-| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 51 PASS，`--install`/`--launch` 通过 |
+| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过 |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
 | 自动 Java | `java-runtime-epsilon` / Java 25.0.1，约 100.2MB，411 files，`.complete` 正常 |
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
@@ -57,7 +57,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 
 - `CMUmcl.exe` 默认构建仍是 framework-dependent；已生成并验证 `dist\CMUmcl-win-x64-selfcontained.zip`，分发用自包含包。
 - 发布自动化未配置：GitHub Actions 可自动构建并上传 Release；客户端自动更新尚未实现。
-- Forge 下载目前没有独立重试；本机网络偶发 reset 时需要重跑，后续可复用 Java 下载重试策略。
+- Forge 下载已加独立 3 次重试（临时网络/408/429/5xx，间隔 1s/2s）；若网络持续不稳定仍可能失败。
 - Forge 1.20.1 在 JDK 21 上已验证可启动；官方目标仍是 Java 17，后续可评估精确约束。
 - 自动下载已加 3 次重试（仅临时网络 / 408 / 429 / 5xx，间隔 1s/2s）；若代理持续不稳定仍可能失败。
 - Forge / NeoForge / Quilt 尚未实现启动；线上 `Mod` 实例需要等下一阶段。
