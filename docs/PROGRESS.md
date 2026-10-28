@@ -15,8 +15,10 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - [x] **3. 启动**：原版 + Fabric 启动、authlib-injector、内存/目录参数
 - [x] **3.5 Java**：按版本要求选择本地 JDK；缺 Java 自动下载 Mojang runtime
 - [x] **4. 自包含发布**：已生成并验证不依赖用户安装 .NET 10 的 win-x64 包
+- [ ] **4.5 自动下载重试**：Mojang runtime 下载遇到临时网络错误自动重试（下一项）
 - [ ] **5. 加载器扩展**：Forge / NeoForge / Quilt 安装、启动、Java 上下限
 - [ ] **6. 设置与更新**：Java/内存/目录设置、启动前强制更新、发布自动化
+  - [ ] **6.5 客户端自动更新**：检查 GitHub Release/更新清单，下载并替换自包含版本（参考 PCL / YSUMCL 的 updater）
 - [ ] **7. 社区验收**：真实整合包、真实玩家、正式域名/证书
 
 ## 当前基线
@@ -66,6 +68,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
   - [ ] 自包含发布
   - [ ] Forge / NeoForge / Quilt
   - [ ] 自动下载重试
+  - [ ] 客户端自动更新
   - [ ] 设置页 / 强制更新
   - [ ] 其他：
 - 完成标准：
