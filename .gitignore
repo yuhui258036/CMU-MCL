@@ -1,0 +1,17 @@
+# Focused repository: only the CMUmcl client source and docs are tracked.
+/*
+!/.gitignore
+!/CMUmcl/
+!/docs/
+
+# CMUmcl build outputs and IDE files
+/CMUmcl/bin/
+/CMUmcl/obj/
+/CMUmcl/.vs/
+/CMUmcl/*.user
+/CMUmcl/**/*.user
+
+# Editor/R history artifacts
+**/.Rhistory
+**/.RData
+**/.Ruserdata
