@@ -5,7 +5,7 @@
 
 ## 一句话状态
 
-CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选择 Java，并在缺少兼容 Java 时自动下载 Mojang runtime；26.3 已实际启动到主菜单。自包含 win-x64 包已生成并验证独立启动。下一步做自动下载重试，然后做 Forge / NeoForge / Quilt 支持。
+CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选择 Java，并在缺少兼容 Java 时自动下载 Mojang runtime；26.3 已实际启动到主菜单。自包含 win-x64 包已生成并验证独立启动。自动下载已加 3 次重试。下一步做 Forge / NeoForge / Quilt 支持。
 
 ## 阶段总览
 
@@ -15,7 +15,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - [x] **3. 启动**：原版 + Fabric 启动、authlib-injector、内存/目录参数
 - [x] **3.5 Java**：按版本要求选择本地 JDK；缺 Java 自动下载 Mojang runtime
 - [x] **4. 自包含发布**：已生成并验证不依赖用户安装 .NET 10 的 win-x64 包
-- [ ] **4.5 自动下载重试**：Mojang runtime 下载遇到临时网络错误自动重试（下一项）
+- [x] **4.5 自动下载重试**：Mojang runtime 下载遇到临时网络错误自动重试 3 次（1s/2s）
 - [ ] **5. 加载器扩展**：Forge / NeoForge / Quilt 安装、启动、Java 上下限
 - [ ] **6. 设置与更新**：Java/内存/目录设置、启动前强制更新、发布自动化
   - [ ] **6.5 客户端自动更新**：检查 GitHub Release/更新清单，下载并替换自包含版本（参考 PCL / YSUMCL 的 updater）
@@ -26,10 +26,10 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 项目 | 状态 |
 | --- | --- |
 | 分支 | `main` |
-| 本地提交 | `6b2f98d` |
+| 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
-| 测试 | JavaHarness：默认 47 PASS；自动下载模式 57 PASS |
+| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
 | 自动 Java | `java-runtime-epsilon` / Java 25.0.1，约 100.2MB，411 files，`.complete` 正常 |
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
@@ -54,7 +54,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 
 - `CMUmcl.exe` 默认构建仍是 framework-dependent；已生成并验证 `dist\CMUmcl-win-x64-selfcontained.zip`，分发用自包含包。
 - 发布自动化未配置：GitHub Actions 可自动构建并上传 Release；客户端自动更新尚未实现。
-- 自动下载目前没有显式重试；本机代理 `127.0.0.1:7890` 偶发 TLS reset，手动重试可成功。
+- 自动下载已加 3 次重试（仅临时网络 / 408 / 429 / 5xx，间隔 1s/2s）；若代理持续不稳定仍可能失败。
 - Forge / NeoForge / Quilt 尚未实现启动；线上 `Mod` 实例需要等下一阶段。
 - `CSUxYSU union server` 的服务器地址目前为空，需要后台补上。
 - 服务端 manifest 私钥仍在服务器上；后续可评估离线签名。

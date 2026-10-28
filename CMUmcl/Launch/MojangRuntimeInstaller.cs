@@ -28,6 +28,14 @@ namespace CMUmcl.Launch
         private const string PlatformKey = "windows-x64";
         private const string CompleteMarker = ".complete";
 
+        private const int MaxAttempts = 3;
+
+        private static readonly TimeSpan[] RetryDelays =
+        {
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+        };
+
         private static readonly HashSet<string> AllowedHosts = new(StringComparer.OrdinalIgnoreCase)
         {
             "piston-meta.mojang.com",
@@ -206,6 +214,20 @@ namespace CMUmcl.Launch
         }
 
         /// <summary>
+        /// True when the HTTP status code indicates a transient failure worth retrying:
+        /// 408 (request timeout), 429 (rate limited), or a 5xx server error (500/502/503/504).
+        /// </summary>
+        public static bool IsRetryableStatus(int statusCode)
+        {
+            return statusCode == 408
+                || statusCode == 429
+                || statusCode == 500
+                || statusCode == 502
+                || statusCode == 503
+                || statusCode == 504;
+        }
+
+        /// <summary>
         /// Normalizes a manifest relative path and rejects traversal. Returns the
         /// normalized relative path using the platform directory separator.
         /// </summary>
@@ -315,30 +337,21 @@ namespace CMUmcl.Launch
             if (!IsAllowedUrl(url))
                 throw new LaunchException("Java 运行时下载地址不在允许的主机列表内，已中止。");
 
-            HttpResponseMessage response;
-            try
+            return await WithRetryAsync(async () =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new LaunchException("网络错误，无法获取 Java 运行时索引，请检查网络连接。", ex);
-            }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-            {
-                throw new LaunchException("获取 Java 运行时索引超时，请稍后再试。", ex);
-            }
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
-            using (response)
-            {
                 EnsureAllowedUri(response.RequestMessage?.RequestUri);
+
+                if (IsRetryableStatus((int)response.StatusCode))
+                    throw new RetryableHttpException((int)response.StatusCode);
 
                 if (!response.IsSuccessStatusCode)
                     throw new LaunchException($"获取 Java 运行时索引失败（HTTP {(int)response.StatusCode}）。");
 
                 return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            }
+            }, IndexDownloadError, ct).ConfigureAwait(false);
         }
 
         private async Task DownloadToFileAsync(
@@ -357,24 +370,15 @@ namespace CMUmcl.Launch
             if (!IsAllowedUrl(url))
                 throw new LaunchException("Java 运行时下载地址不在允许的主机列表内，已中止。");
 
-            HttpResponseMessage response;
-            try
+            await WithRetryAsync(async () =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new LaunchException("网络错误，无法下载 Java 运行时，请检查网络连接。", ex);
-            }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-            {
-                throw new LaunchException("下载 Java 运行时超时，请稍后再试。", ex);
-            }
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
-            using (response)
-            {
                 EnsureAllowedUri(response.RequestMessage?.RequestUri);
+
+                if (IsRetryableStatus((int)response.StatusCode))
+                    throw new RetryableHttpException((int)response.StatusCode);
 
                 if (!response.IsSuccessStatusCode)
                     throw new LaunchException($"下载 Java 运行时失败（HTTP {(int)response.StatusCode}）。");
@@ -384,37 +388,52 @@ namespace CMUmcl.Launch
                 await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
 
                 var buffer = new byte[81920];
-                long total = 0;
+                long attemptBytes = 0;
                 int read;
                 while ((read = await contentStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                 {
                     sha1.AppendData(buffer, 0, read);
                     await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                    total += read;
+                    attemptBytes += read;
 
                     if (counter != null)
                     {
-                        counter.Value += read;
                         progress?.Report(new LaunchProgress
                         {
                             Stage = "下载 Java",
                             ProgressedTasks = doneFiles,
                             TotalTasks = totalFiles,
-                            ProgressedBytes = counter.Value,
+                            ProgressedBytes = counter.Value + attemptBytes,
                             TotalBytes = totalBytes,
-                            Message = $"已下载 {doneFiles}/{totalFiles} 个文件（{FormatUtils.FormatBytes(counter.Value)} / {FormatUtils.FormatBytes(totalBytes)}）",
+                            Message = $"已下载 {doneFiles}/{totalFiles} 个文件（{FormatUtils.FormatBytes(counter.Value + attemptBytes)} / {FormatUtils.FormatBytes(totalBytes)}）",
                         });
                     }
                 }
 
                 string actualSha1 = Convert.ToHexString(sha1.GetHashAndReset()).ToLowerInvariant();
-                bool sizeOk = expectedSize <= 0 || total == expectedSize;
+                bool sizeOk = expectedSize <= 0 || attemptBytes == expectedSize;
                 bool sha1Ok = string.IsNullOrWhiteSpace(expectedSha1)
                     || string.Equals(actualSha1, expectedSha1.Trim().ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
 
                 if (!sizeOk || !sha1Ok)
                     throw new LaunchException(failureMessage);
-            }
+
+                if (counter != null)
+                    counter.Value += attemptBytes;
+
+                return true; // Success marker; the retry helper is generic over the operation's result.
+            }, RuntimeDownloadError, ct, attempt =>
+            {
+                progress?.Report(new LaunchProgress
+                {
+                    Stage = "下载 Java",
+                    ProgressedTasks = doneFiles,
+                    TotalTasks = totalFiles,
+                    ProgressedBytes = counter?.Value ?? 0,
+                    TotalBytes = totalBytes,
+                    Message = $"下载中断，正在重试（第 {attempt} 次）……",
+                });
+            }).ConfigureAwait(false);
         }
 
         private static void TryDeleteDirectory(string dir)
@@ -428,6 +447,69 @@ namespace CMUmcl.Launch
             {
                 // Best effort.
             }
+        }
+
+        // ------------------------------------------------------------------
+        // Bounded retry for transient network failures
+        // ------------------------------------------------------------------
+
+        private static bool IsTransient(Exception ex, CancellationToken ct)
+        {
+            return ex is HttpRequestException
+                || ex is IOException
+                || ex is RetryableHttpException
+                || (ex is TaskCanceledException && !ct.IsCancellationRequested);
+        }
+
+        private static TimeSpan RetryDelayFor(int attempt)
+            => attempt - 1 < RetryDelays.Length ? RetryDelays[attempt - 1] : RetryDelays[^1];
+
+        private static LaunchException IndexDownloadError(Exception ex) => ex switch
+        {
+            RetryableHttpException h => new LaunchException($"获取 Java 运行时索引失败（HTTP {h.StatusCode}）。", ex),
+            TaskCanceledException => new LaunchException("获取 Java 运行时索引超时，请稍后再试。", ex),
+            _ => new LaunchException("网络错误，无法获取 Java 运行时索引，请检查网络连接。", ex),
+        };
+
+        private static LaunchException RuntimeDownloadError(Exception ex) => ex switch
+        {
+            RetryableHttpException h => new LaunchException($"下载 Java 运行时失败（HTTP {h.StatusCode}）。", ex),
+            TaskCanceledException => new LaunchException("下载 Java 运行时超时，请稍后再试。", ex),
+            _ => new LaunchException("网络错误，无法下载 Java 运行时，请检查网络连接。", ex),
+        };
+
+        private static async Task<T> WithRetryAsync<T>(
+            Func<Task<T>> operation,
+            Func<Exception, LaunchException> finalError,
+            CancellationToken ct,
+            Action<int>? onRetry = null)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await operation().ConfigureAwait(false);
+                }
+                catch (Exception ex) when (attempt < MaxAttempts && IsTransient(ex, ct))
+                {
+                    onRetry?.Invoke(attempt);
+                    await Task.Delay(RetryDelayFor(attempt), ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (IsTransient(ex, ct))
+                {
+                    throw finalError(ex);
+                }
+            }
+        }
+
+        private sealed class RetryableHttpException : Exception
+        {
+            public RetryableHttpException(int statusCode) : base($"HTTP {statusCode}")
+            {
+                StatusCode = statusCode;
+            }
+
+            public int StatusCode { get; }
         }
 
         private sealed class ByteCounter
