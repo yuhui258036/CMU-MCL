@@ -15,6 +15,7 @@ using CmlLib.Core.ProcessBuilder;
 
 using CMUmcl.Auth;
 using CMUmcl.Content;
+using CMUmcl.Launch.Forge;
 
 namespace CMUmcl.Launch
 {
@@ -98,44 +99,8 @@ namespace CMUmcl.Launch
                 CreateByteProgress("安装原版", progress),
                 ct).ConfigureAwait(false);
 
-            // 8. Resolve loader.
-            string versionName;
-            string normalizedLoader = loader.Trim().ToLowerInvariant();
-            switch (normalizedLoader)
-            {
-                case "":
-                case "vanilla":
-                    versionName = gameVersion;
-                    break;
-
-                case "fabric":
-                {
-                    progress?.Report(new LaunchProgress { Stage = "安装 Fabric", Message = "正在安装 Fabric…" });
-                    var fabric = new FabricInstaller(_http);
-                    if (string.IsNullOrWhiteSpace(loaderVersion))
-                        versionName = await fabric.Install(gameVersion, launcher.MinecraftPath).ConfigureAwait(false);
-                    else
-                        versionName = await fabric.Install(gameVersion, loaderVersion, launcher.MinecraftPath).ConfigureAwait(false);
-
-                    progress?.Report(new LaunchProgress { Stage = "安装 Fabric", Message = $"正在下载 Fabric 依赖（{versionName}）…" });
-                    await launcher.InstallAsync(
-                        versionName,
-                        CreateFileProgress("安装 Fabric", progress),
-                        CreateByteProgress("安装 Fabric", progress),
-                        ct).ConfigureAwait(false);
-                    break;
-                }
-
-                case "forge":
-                case "neoforge":
-                case "quilt":
-                    throw new LaunchException(UnsupportedLoaderMessage);
-
-                default:
-                    throw new LaunchException(UnsupportedLoaderMessage);
-            }
-
-            // 8.5 Select a compatible Java runtime (local first, auto-download as fallback).
+            // 7.5 Select a compatible Java runtime (before loader resolution so Forge
+            // processors can run). Same logic as before; only the timing changes.
             JavaRequirement requirement = JavaVersionResolver.ResolveRequirement(gameVersion, LauncherPaths.MinecraftDirectory);
 
             IReadOnlyList<JavaInfo> javaCandidates = JavaLocator.Scan();
@@ -165,6 +130,60 @@ namespace CMUmcl.Launch
                 JavaVersion = java.Major.ToString(),
                 JavaPath = java.JavaPath,
             });
+
+            // 8. Resolve loader.
+            string versionName;
+            string normalizedLoader = loader.Trim().ToLowerInvariant();
+            switch (normalizedLoader)
+            {
+                case "":
+                case "vanilla":
+                    versionName = gameVersion;
+                    break;
+
+                case "fabric":
+                {
+                    progress?.Report(new LaunchProgress { Stage = "安装 Fabric", Message = "正在安装 Fabric…" });
+                    var fabric = new FabricInstaller(_http);
+                    if (string.IsNullOrWhiteSpace(loaderVersion))
+                        versionName = await fabric.Install(gameVersion, launcher.MinecraftPath).ConfigureAwait(false);
+                    else
+                        versionName = await fabric.Install(gameVersion, loaderVersion, launcher.MinecraftPath).ConfigureAwait(false);
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 Fabric", Message = $"正在下载 Fabric 依赖（{versionName}）…" });
+                    await launcher.InstallAsync(
+                        versionName,
+                        CreateFileProgress("安装 Fabric", progress),
+                        CreateByteProgress("安装 Fabric", progress),
+                        ct).ConfigureAwait(false);
+                    break;
+                }
+
+                case "forge":
+                {
+                    if (string.IsNullOrWhiteSpace(loaderVersion))
+                        throw new LaunchException("缺少 Forge 版本信息，无法安装该加载器。");
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 Forge", Message = "正在安装 Forge…" });
+                    using var forgeInstaller = new ForgeLoaderInstaller();
+                    versionName = await forgeInstaller.InstallAsync(gameVersion, loaderVersion, java, launcher.MinecraftPath, progress, ct).ConfigureAwait(false);
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 Forge", Message = $"正在下载 Forge 依赖（{versionName}）…" });
+                    await launcher.InstallAsync(
+                        versionName,
+                        CreateFileProgress("安装 Forge", progress),
+                        CreateByteProgress("安装 Forge", progress),
+                        ct).ConfigureAwait(false);
+                    break;
+                }
+
+                case "neoforge":
+                case "quilt":
+                    throw new LaunchException(UnsupportedLoaderMessage);
+
+                default:
+                    throw new LaunchException(UnsupportedLoaderMessage);
+            }
 
             // 9. Build MSession.
             var mSession = new MSession(session.SelectedProfileName, session.AccessToken, session.SelectedProfileId);

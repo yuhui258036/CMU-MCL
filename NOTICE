@@ -1,0 +1,33 @@
+# NOTICE — CMUmcl
+
+本项目（CMUmcl）整体采用 GNU General Public License v3.0（SPDX: GPL-3.0-only）许可，
+包括既有代码与本项目对 Axolotl Launcher（YSUMCL fork）Forge 安装器逻辑的移植/重实现代码。
+完整许可文本见同目录 LICENSE 文件。
+
+## Forge 安装器逻辑的移植/重实现来源
+
+本项目的 Forge 安装器逻辑（CMUmcl\Launch\Forge\ 目录下的 ForgeModels.cs、
+ForgeInstallerParser.cs、ForgeProcessorRunner.cs、ForgeLoaderInstaller.cs）以行为/结构参照方式
+移植/重实现自 Axolotl Launcher（YSUMCL fork）。该项目采用 GPL-3.0-only 许可，版权归其上游作者所有。
+
+参照的文件：
+- packages/app-lib/src/api/loader_metadata.rs（InstallerProfile / Processor / SidedDataEntry 结构与 parse_installer）
+- packages/app-lib/src/launcher/mod.rs（processors 执行与 data map 构建）
+- packages/app-lib/src/launcher/args.rs（get_processor_arguments / get_processor_main_class）
+- packages/daedalus/src/modded.rs（PartialVersionInfo / Processor / SidedDataEntry）
+- packages/daedalus/src/lib.rs（get_path_from_artifact）
+
+未复制任何 Plain Craft Launcher（PCL）代码、字符串或品牌；PCL-CE 核心采用
+PCL Limited Distribution License，禁止纳入本项目。
+
+## 第三方依赖许可
+
+以下第三方组件保留各自上游许可，不受本项目整体 GPL-3.0-only 许可影响，仅在其自身许可下随包分发：
+- CmlLib.Core（MIT License）
+- authlib-injector.jar（随包二进制，按其上游许可分发）
+- 各 NuGet 依赖（按其各自许可分发）
+
+## 分发义务（GPL-3.0 第 6 条）
+
+开发期间本仓库可保持私有；但一旦向他人分发本程序的二进制（目标码），必须同时以
+GPL-3.0-only 向接收者提供对应的完整源码，并随包附带本 LICENSE 与 NOTICE 文件。

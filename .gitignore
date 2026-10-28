@@ -1,6 +1,8 @@
 # Focused repository: only the CMUmcl client source and docs are tracked.
 /*
 !/.gitignore
+!/LICENSE
+!/NOTICE
 !/CMUmcl/
 !/docs/
 
