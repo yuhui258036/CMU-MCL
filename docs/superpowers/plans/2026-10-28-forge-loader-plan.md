@@ -60,7 +60,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 ## 前置准备（开始前执行一次）
 
-- [ ] **Step 0.1：创建临时目录并备份将被修改的 3 个源文件**
+- [x] **Step 0.1：创建临时目录并备份将被修改的 3 个源文件**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "D:\新启动器\.tmp","D:\新启动器\.dotnet-home","D:\新启动器\.nuget\packages" | Out-Null
@@ -74,7 +74,7 @@ Get-ChildItem -LiteralPath $bk | Select-Object Name
 
 - 预期：打印 `LaunchService.cs`、`PackCardViewModel.cs`、`.gitignore` 三个文件名。回滚方式：将 `D:\新启动器\.tmp\backup-step4\*` 覆盖回原路径即可。
 
-- [ ] **Step 0.2：确认 dotnet 与 SDK 可用**
+- [x] **Step 0.2：确认 dotnet 与 SDK 可用**
 
 ```powershell
 $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
@@ -93,7 +93,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 - Modify: `D:\新启动器\.gitignore`
 - Create: `D:\新启动器\CMUmcl\README-step4.md`
 
-- [ ] **Step 1.1：创建根级 `LICENSE`（复制 GPL-3.0 全文）**
+- [x] **Step 1.1：创建根级 `LICENSE`（复制 GPL-3.0 全文）**
 
 本地已有 Axolotl（GPL-3.0-only）的规范 LICENSE 副本，直接复制：
 
@@ -105,7 +105,7 @@ Get-Content -LiteralPath "D:\新启动器\LICENSE" -TotalCount 6
 
 - 预期：前 6 行以 `GNU GENERAL PUBLIC LICENSE` / `Version 3, 29 June 2007` 开头；行数约 `674`。若本地副本缺失，改用 `Invoke-WebRequest -Uri "https://www.gnu.org/licenses/gpl-3.0.txt" -OutFile "D:\新启动器\LICENSE"` 后重新校验前 6 行与行数。
 
-- [ ] **Step 1.2：创建根级 `NOTICE`**
+- [x] **Step 1.2：创建根级 `NOTICE`**
 
 文件 `D:\新启动器\NOTICE`，完整内容：
 
@@ -145,7 +145,7 @@ PCL Limited Distribution License，禁止纳入本项目。
 GPL-3.0-only 向接收者提供对应的完整源码，并随包附带本 LICENSE 与 NOTICE 文件。
 ```
 
-- [ ] **Step 1.3：修改 `.gitignore` 放行根级 `LICENSE`/`NOTICE`**
+- [x] **Step 1.3：修改 `.gitignore` 放行根级 `LICENSE`/`NOTICE`**
 
 用编辑工具将以下旧文本：
 
@@ -171,7 +171,7 @@ GPL-3.0-only 向接收者提供对应的完整源码，并随包附带本 LICENS
 
 - 预期：编辑成功（`oldString` 唯一命中）。这保证根级 `LICENSE`/`NOTICE` 不再被 `/*` 规则忽略。
 
-- [ ] **Step 1.4：创建 `CMUmcl\README-step4.md`（含 README notice）**
+- [x] **Step 1.4：创建 `CMUmcl\README-step4.md`（含 README notice）**
 
 文件 `D:\新启动器\CMUmcl\README-step4.md`，完整内容：
 
@@ -222,7 +222,7 @@ $env:NUGET_PACKAGES = "D:\新启动器\.nuget\packages"
 ```
 ```
 
-- [ ] **Step 1.5：验证 .gitignore 放行生效**
+- [x] **Step 1.5：验证 .gitignore 放行生效**
 
 ```powershell
 cd "D:\新启动器"
@@ -232,7 +232,7 @@ git status --short -- LICENSE NOTICE .gitignore
 
 - 预期：`git check-ignore` 无输出（表示未被忽略）；`git status` 显示 `?? LICENSE`、`?? NOTICE`、` M .gitignore`（`.gitignore` 为修改）。
 
-- [ ] **Step 1.6：实现者自查**
+- [x] **Step 1.6：实现者自查**
 
 确认 `LICENSE` 为 GPL-3.0 全文（非空、行数约 674）、`NOTICE` 含 Axolotl 移植归属与“分发需附源码”、`.gitignore` 放行了 `LICENSE`/`NOTICE` 且未放行其它根级文件（`admin-credentials.txt`、`PCL-CE` 等仍被忽略）。若 `git check-ignore` 意外输出 LICENSE/NOTICE，修正 `.gitignore` 后重跑 Step 1.5。
 
@@ -248,7 +248,7 @@ git status --short -- LICENSE NOTICE .gitignore
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestRegistry.cs`
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestsModels.cs`
 
-- [ ] **Step 2.1：创建 `ForgeModels.cs`**
+- [x] **Step 2.1：创建 `ForgeModels.cs`**
 
 文件 `D:\新启动器\CMUmcl\Launch\Forge\ForgeModels.cs`，完整内容：
 
@@ -395,7 +395,7 @@ namespace CMUmcl.Launch.Forge
 }
 ```
 
-- [ ] **Step 2.2：创建验证工程 `ForgeHarness.csproj`**
+- [x] **Step 2.2：创建验证工程 `ForgeHarness.csproj`**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "D:\新启动器\.tmp\ForgeHarness" | Out-Null
@@ -423,7 +423,7 @@ New-Item -ItemType Directory -Force -Path "D:\新启动器\.tmp\ForgeHarness" | 
 </Project>
 ```
 
-- [ ] **Step 2.3：创建 `Program.cs` / `State.cs` / `TestRegistry.cs`（只写一次）**
+- [x] **Step 2.3：创建 `Program.cs` / `State.cs` / `TestRegistry.cs`（只写一次）**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\Program.cs`：
 
@@ -516,7 +516,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 2.4：创建 `TestsModels.cs`（任务 2 的纯函数测试）**
+- [x] **Step 2.4：创建 `TestsModels.cs`（任务 2 的纯函数测试）**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\TestsModels.cs`：
 
@@ -584,7 +584,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 2.5：构建 CMUmcl（验证新文件可编译）**
+- [x] **Step 2.5：构建 CMUmcl（验证新文件可编译）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -597,7 +597,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：末尾含 `生成成功。`/`Build succeeded` 且 `0 Error(s)`。
 
-- [ ] **Step 2.6：运行任务 2 的纯函数测试**
+- [x] **Step 2.6：运行任务 2 的纯函数测试**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -610,7 +610,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：所有行以 `PASS ` 开头，末尾 `== ALL TESTS PASSED ==`。
 
-- [ ] **Step 2.7：提交（仅本地，不推送）**
+- [x] **Step 2.7：提交（仅本地，不推送）**
 
 ```powershell
 cd "D:\新启动器"
@@ -628,7 +628,7 @@ git commit -m "feat(forge): add Forge models and Maven artifact path parsing"
 - Create: `D:\新启动器\CMUmcl\Launch\Forge\ForgeInstallerParser.cs`
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestsParser.cs`
 
-- [ ] **Step 3.1：下载真实 Forge 安装器 fixture（一次性，供解析测试，不提交）**
+- [x] **Step 3.1：下载真实 Forge 安装器 fixture（一次性，供解析测试，不提交）**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "D:\新启动器\.tmp\forge-fixture" | Out-Null
@@ -645,7 +645,7 @@ Get-Item -LiteralPath $jar | Select-Object Name, Length
 
 - 预期：`expected=` 与 `actual=` 相同（40 位 hex）；`Length` 为 `8859760`。若直连超时，加代理重试：`Invoke-WebRequest ... -Proxy "http://127.0.0.1:7890"`。
 
-- [ ] **Step 3.2：创建 `ForgeInstallerParser.cs`**
+- [x] **Step 3.2：创建 `ForgeInstallerParser.cs`**
 
 文件 `D:\新启动器\CMUmcl\Launch\Forge\ForgeInstallerParser.cs`，完整内容：
 
@@ -829,7 +829,7 @@ namespace CMUmcl.Launch.Forge
 }
 ```
 
-- [ ] **Step 3.3：创建 `TestsParser.cs`**
+- [x] **Step 3.3：创建 `TestsParser.cs`**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\TestsParser.cs`：
 
@@ -897,7 +897,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 3.4：构建 CMUmcl**
+- [x] **Step 3.4：构建 CMUmcl**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -910,7 +910,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`0 Error(s)`。
 
-- [ ] **Step 3.5：运行测试（含解析用例）**
+- [x] **Step 3.5：运行测试（含解析用例）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -923,7 +923,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`version id`、`inheritsFrom`、`merged has forge universal`、`merged has fmlcore`、`merged has fmlloader`、`10 processors total`、`6 client processors`、`BINPATCH.client rewritten to absolute path`、`final doc has libraries`、`final doc drops data/processors` 全部 `PASS`；末尾 `== ALL TESTS PASSED ==`。
 
-- [ ] **Step 3.6：实现者自查**
+- [x] **Step 3.6：实现者自查**
 
 确认合并结果含 `net.minecraftforge:forge:1.20.1-47.4.28:universal` 与 `fmlcore`/`fmlloader`（来自 install_profile.libraries，version.json.libraries 缺它们）；`BINPATCH.client` 被改写为暂存目录内的绝对路径且文件确实存在；最终文档丢弃 `data`/`processors`、保留 `libraries`。若 `6 client processors` 不是 6，核对真实 install_profile 的 `sides` 过滤逻辑（`ForgeProcessorRunner.ShouldRun`）。
 
@@ -935,7 +935,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 - Create: `D:\新启动器\CMUmcl\Launch\Forge\ForgeProcessorRunner.cs`
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestsProcessor.cs`
 
-- [ ] **Step 4.1：创建 `ForgeProcessorRunner.cs`**
+- [x] **Step 4.1：创建 `ForgeProcessorRunner.cs`**
 
 文件 `D:\新启动器\CMUmcl\Launch\Forge\ForgeProcessorRunner.cs`，完整内容：
 
@@ -1177,7 +1177,7 @@ namespace CMUmcl.Launch.Forge
 }
 ```
 
-- [ ] **Step 4.2：创建 `TestsProcessor.cs`**
+- [x] **Step 4.2：创建 `TestsProcessor.cs`**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\TestsProcessor.cs`：
 
@@ -1311,7 +1311,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 4.3：构建 CMUmcl**
+- [x] **Step 4.3：构建 CMUmcl**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -1324,7 +1324,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`0 Error(s)`。
 
-- [ ] **Step 4.4：运行测试（含参数解析/主类/outputs 用例）**
+- [x] **Step 4.4：运行测试（含参数解析/主类/outputs 用例）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -1337,7 +1337,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`ResolveProcessorArg`、`BuildClassPath / BuildDataMap`、`GetProcessorMainClass`、`ShouldRun`、`ValidateOutputs` 各用例全部 `PASS`；末尾 `== ALL TESTS PASSED ==`。
 
-- [ ] **Step 4.5：实现者自查**
+- [x] **Step 4.5：实现者自查**
 
 确认 `{KEY}/suffix` 用全量替换而非整串匹配；`{MC_SLIM_SHA}` 值剥单引号；`[coord]` 与 data 值中的 `[coord]` 都解析为库路径；主类从 `META-INF/MANIFEST.MF` 的 `Main-Class:` 行读取；`sides` 缺失视为两端都跑；进程用 `ArgumentList` 避免参数转义问题、工作目录为 Minecraft 目录、退出码非 0 抛含 stderr 尾部的中文错误。
 
@@ -1349,7 +1349,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 - Create: `D:\新启动器\CMUmcl\Launch\Forge\ForgeLoaderInstaller.cs`
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestsInstaller.cs`
 
-- [ ] **Step 5.1：创建 `ForgeLoaderInstaller.cs`**
+- [x] **Step 5.1：创建 `ForgeLoaderInstaller.cs`**
 
 文件 `D:\新启动器\CMUmcl\Launch\Forge\ForgeLoaderInstaller.cs`，完整内容：
 
@@ -1678,7 +1678,7 @@ namespace CMUmcl.Launch.Forge
 }
 ```
 
-- [ ] **Step 5.2：创建 `TestsInstaller.cs`（白名单 + 跳过判定，合成目录，无网络）**
+- [x] **Step 5.2：创建 `TestsInstaller.cs`（白名单 + 跳过判定，合成目录，无网络）**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\TestsInstaller.cs`：
 
@@ -1767,7 +1767,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 5.3：构建 CMUmcl**
+- [x] **Step 5.3：构建 CMUmcl**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -1780,7 +1780,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`0 Error(s)`。
 
-- [ ] **Step 5.4：运行测试（白名单 + 跳过判定）**
+- [x] **Step 5.4：运行测试（白名单 + 跳过判定）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -1793,7 +1793,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`Forge host allowlist`、`CanSkipInstall (synthetic)` 各用例全部 `PASS`（`valid → true`、破坏 `inheritsFrom`/库 sha1/`.forge-complete` 后均 `false`）；末尾 `== ALL TESTS PASSED ==`。
 
-- [ ] **Step 5.5：提交**
+- [x] **Step 5.5：提交**
 
 ```powershell
 cd "D:\新启动器"
@@ -1811,7 +1811,7 @@ git commit -m "feat(forge): add installer parser, processor runner and orchestra
 - Modify: `D:\新启动器\CMUmcl\Launch\LaunchService.cs`
 - Modify: `D:\新启动器\CMUmcl\PackCardViewModel.cs`
 
-- [ ] **Step 6.1：在 `LaunchService.cs` 顶部加入 `using CMUmcl.Launch.Forge;`**
+- [x] **Step 6.1：在 `LaunchService.cs` 顶部加入 `using CMUmcl.Launch.Forge;`**
 
 用编辑工具将以下旧文本：
 
@@ -1828,7 +1828,7 @@ using CMUmcl.Content;
 using CMUmcl.Launch.Forge;
 ```
 
-- [ ] **Step 6.2：把 Java 选择前移到原版安装之后、加载器解析之前**
+- [x] **Step 6.2：把 Java 选择前移到原版安装之后、加载器解析之前**
 
 用编辑工具将以下旧文本：
 
@@ -1888,7 +1888,7 @@ using CMUmcl.Launch.Forge;
             string versionName;
 ```
 
-- [ ] **Step 6.3：删除旧的 8.5 Java 选择块**
+- [x] **Step 6.3：删除旧的 8.5 Java 选择块**
 
 用编辑工具将以下旧文本（整块删除，替换为空）：
 
@@ -1933,7 +1933,7 @@ using CMUmcl.Launch.Forge;
             // 9. Build MSession.
 ```
 
-- [ ] **Step 6.4：在 switch 中新增 `case "forge"`**
+- [x] **Step 6.4：在 switch 中新增 `case "forge"`**
 
 用编辑工具将以下旧文本：
 
@@ -1976,7 +1976,7 @@ using CMUmcl.Launch.Forge;
                     throw new LaunchException(UnsupportedLoaderMessage);
 ```
 
-- [ ] **Step 6.5：修改 `PackCardViewModel.cs`（forge 不再提示不支持）**
+- [x] **Step 6.5：修改 `PackCardViewModel.cs`（forge 不再提示不支持）**
 
 用编辑工具将以下旧文本：
 
@@ -1998,7 +1998,7 @@ using CMUmcl.Launch.Forge;
             }
 ```
 
-- [ ] **Step 6.6：构建 CMUmcl**
+- [x] **Step 6.6：构建 CMUmcl**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -2011,7 +2011,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`0 Error(s)`。若报 `java` 可为 null，检查 Step 6.3 是否完全删除旧块、Step 6.2 的 `java` 声明在 `switch` 之前且非空收窄成立。
 
-- [ ] **Step 6.7：运行默认纯函数测试（确认无回归）**
+- [x] **Step 6.7：运行默认纯函数测试（确认无回归）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -2024,7 +2024,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：所有用例 `PASS`，末尾 `== ALL TESTS PASSED ==`。
 
-- [ ] **Step 6.8：实现者自查**
+- [x] **Step 6.8：实现者自查**
 
 对照 `LaunchService.LaunchAsync`：步骤 7 原版安装 → 7.5 Java 选择 → 8 switch（forge 分支用控制台 java.exe 跑 processors，返回 `versionName`）→ 9/10/11 建进程（游戏仍用 `java.JavaPath` 即 javaw.exe）。`neoforge`/`quilt` 仍抛原 `UnsupportedLoaderMessage`。`PackCardViewModel` 中 `forge` 不再显示“当前先支持原版/Fabric”。用 `git diff --stat` 确认只改了这两个文件。
 
@@ -2035,7 +2035,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 **Files:**
 - Create: `D:\新启动器\.tmp\ForgeHarness\TestsEndToEnd.cs`
 
-- [ ] **Step 7.1：创建 `TestsEndToEnd.cs`（--install 真实安装 + --launch 端到端）**
+- [x] **Step 7.1：创建 `TestsEndToEnd.cs`（--install 真实安装 + --launch 端到端）**
 
 文件 `D:\新启动器\.tmp\ForgeHarness\TestsEndToEnd.cs`，完整内容：
 
@@ -2278,7 +2278,7 @@ namespace ForgeHarness
 }
 ```
 
-- [ ] **Step 7.2：构建 CMUmcl 与 harness**
+- [x] **Step 7.2：构建 CMUmcl 与 harness**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -2292,7 +2292,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：两者 `0 Error(s)`。
 
-- [ ] **Step 7.3：真实 Forge 安装 + 跳过 + 损坏修复（--install）**
+- [x] **Step 7.3：真实 Forge 安装 + 跳过 + 损坏修复（--install）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -2305,7 +2305,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`version id`、`version json exists`、`install_profile.json exists`、`.forge-complete exists`、`universal jar exists`、`universal jar sha1 == 1c2208dc…`、`no staging dirs left`、`second run returns same id (skip)`、`reinstalled after corruption`、`universal jar restored`、`no staging dirs after repair` 全部 `PASS`；末尾 `== ALL TESTS PASSED ==`。控制台可见 6 条 `运行 Forge 处理器 i/10`（i 为真实索引，客户端处理器）与 4 条 `跳过 Forge 处理器 i/10（server）`。首次安装约需下载安装器 + 依赖库 + 跑 6 个 processors（其中 `DOWNLOAD_MOJMAPS` 会从 Mojang 官方下载 mappings），耗时数分钟；若网络失败按 Step 3.1 加代理。
 
-- [ ] **Step 7.4：端到端启动到主菜单（--launch，需已登录）**
+- [x] **Step 7.4：端到端启动到主菜单（--launch，需已登录）**
 
 前置：先在图形界面登录一次，使 `%LOCALAPPDATA%\CMUmcl\auth` 存在有效会话（参考 PROGRESS.md 已有登录会话）。
 
@@ -2320,7 +2320,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：`VERSION_NAME=1.20.1-forge-47.4.28`；`GAME_RUNNING_AFTER_120S` + `game process running` PASS（进程 120 秒后仍在运行，表示稳定进入 Forge 启动流程，无早期崩溃）；`LATEST.LOG` 尾部含 `BootstrapLauncher`/`fml`/`forge` 关键字；`launch completed without exception` PASS。无 Forge 官方广告页进程（`java -cp` 处理器进程已随安装结束退出，仅剩游戏进程）。日志中“安装原版”仅出现一次（原版幂等，不重复下载）。
 
-- [ ] **Step 7.5：第二次启动验证“跳过重装”**
+- [x] **Step 7.5：第二次启动验证“跳过重装”**
 
 再次运行：
 
@@ -2335,7 +2335,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：控制台出现 `Forge 1.20.1-forge-47.4.28 已安装，跳过重装。`，且不再出现 `运行 Forge 处理器`（无 processors 重跑）；进程仍 `GAME_RUNNING_AFTER_120S`。
 
-- [ ] **Step 7.6：实现者自查**
+- [x] **Step 7.6：实现者自查**
 
 核对验收：`versions\1.20.1-forge-47.4.28\1.20.1-forge-47.4.28.json` 存在且 `inheritsFrom=1.20.1`、`libraries` 含 `net.minecraftforge:forge:1.20.1-47.4.28:universal` 与 `fmlcore`/`fmlloader`；`libraries\net\minecraftforge\forge\1.20.1-47.4.28\forge-1.20.1-47.4.28-universal.jar` SHA-1 = `1c2208dc1db2a61ddb6d5dcbe8eae4fd44629e9d`；6 个客户端 processors 执行、4 个 server 跳过；第二次启动跳过重装；删除 universal jar 后自动重装；无广告/GUI；`.forge-staging-*` 无残留。
 
@@ -2346,7 +2346,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 **Files:**
 - Modify: `D:\新启动器\docs\PROGRESS.md`
 
-- [ ] **Step 8.1：最终构建（Release 与 Debug 0 错误）**
+- [x] **Step 8.1：最终构建（Release 与 Debug 0 错误）**
 
 ```powershell
 $env:TEMP = "D:\新启动器\.tmp"
@@ -2360,7 +2360,7 @@ $dotnet = "C:\Users\PC\AppData\Local\Microsoft\dotnet\dotnet.exe"
 
 - 预期：两者末尾均含 `生成成功。`/`Build succeeded` 且 `0 Error(s)`（允许既有 2 个 NU1510 警告）。
 
-- [ ] **Step 8.2：生成 step4 源码 zip（含 LICENSE/NOTICE/README，供分发）**
+- [x] **Step 8.2：生成 step4 源码 zip（含 LICENSE/NOTICE/README，供分发）**
 
 ```powershell
 $dist = "D:\新启动器\dist"
@@ -2373,7 +2373,7 @@ Get-Item -LiteralPath $srcZip | Select-Object Name, Length
 
 - 预期：打印 `CMUmcl-step4-source.zip` 及其 `Length`（>0）。该 zip 内含 `CMUmcl\`、`LICENSE`、`NOTICE`，满足“分发需附源码 + LICENSE/NOTICE”。
 
-- [ ] **Step 8.3：更新 `docs\PROGRESS.md`**
+- [x] **Step 8.3：更新 `docs\PROGRESS.md`**
 
 用编辑工具将以下旧文本：
 
@@ -2400,7 +2400,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选择 Java，并在缺少兼容 Java 时自动下载 Mojang runtime；26.3 已实际启动到主菜单。自包含 win-x64 包已生成并验证独立启动。自动下载已加 3 次重试。Forge（1.20.1 + 47.4.28）已通过 `forge-test` 实例端到端安装并启动到主菜单，采用 GPL-3.0-only 移植/重实现 Axolotl/YSUMCL，附 LICENSE/NOTICE。下一步做 NeoForge / Quilt / 旧版 Forge。
 ```
 
-- [ ] **Step 8.4：核对工作区（不提交数据/密钥）**
+- [x] **Step 8.4：核对工作区（不提交数据/密钥）**
 
 ```powershell
 cd "D:\新启动器"
@@ -2413,7 +2413,7 @@ git status --short
   - 注：`docs/superpowers/specs/2026-10-28-forge-loader-design.md`（规格）也可一并提交。
   若 `git status` 出现意外文件，用 `git restore <path>` 或从暂存区排除，绝不提交数据/密钥。
 
-- [ ] **Step 8.5：提交全部改动**
+- [x] **Step 8.5：提交全部改动**
 
 ```powershell
 cd "D:\新启动器"
@@ -2423,7 +2423,7 @@ git commit -m "feat(forge): add Forge 1.20.1 installer and launch (GPL-3.0-only)
 
 - 预期：`git log --oneline -1` 显示该提交。`git show --stat HEAD` 列出的文件不含数据/密钥/第三方目录。
 
-- [ ] **Step 8.6：推送到远程（本机代理）**
+- [x] **Step 8.6：推送到远程（本机代理）**
 
 ```powershell
 cd "D:\新启动器"
@@ -2432,7 +2432,7 @@ git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pus
 
 - 预期：输出 `Writing objects: 100%` 或 `Everything up-to-date`，无 `fatal`。若代理未启动导致卡住，先启动代理（127.0.0.1:7890）后重试。
 
-- [ ] **Step 8.7：实现者自查（最终验收对照）**
+- [x] **Step 8.7：实现者自查（最终验收对照）**
 
 逐条核对规格“验证/测试”第 1–8 条：①`forge-test` 本地合成实例；②启动流程（原版→Java→Forge 安装→版本档案→补依赖→启动）；③第二次跳过重装；④版本档案 `inheritsFrom=1.20.1`、`libraries` 含 `forge:universal`/`fmlcore`/`fmlloader`、universal jar SHA-1 = `1c2208dc1db2a61ddb6d5dcbe8eae4fd44629e9d`；⑤无广告/无交互 GUI、不重复装原版；⑥损坏自修复；⑦失败清理（断网/哈希不符/处理器非 0/取消均清理 `.forge-staging-*`）；⑧`dotnet build` 0 错误。全部满足后本计划完成。
 
@@ -2444,3 +2444,12 @@ git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pus
 - **占位符扫描**：无 `TBD`/`TODO`/`implement X`/省略号占位；所有创建文件给出完整内容，所有编辑给出精确 old/new 字符串，所有命令给出精确命令与预期输出。
 - **类型一致性**：`ForgeLoaderInstaller.InstallAsync(string,string,JavaInfo,MinecraftPath,IProgress<LaunchProgress>?,CancellationToken)`、`ForgeInstallerParser.Parse(byte[],string)`、`ForgeProcessorRunner.RunAsync(...)`/`ShouldRun`/`BuildDataMap`/`BuildClientDataMap`/`ValidateOutputs`/`ResolveProcessorArg`/`BuildClassPath`/`ResolveLibraryPath`/`ResolveDataValue`/`StripQuotes`/`GetProcessorMainClass` 等签名在任务 2–7 间保持一致；`MinecraftPath` 使用 `BasePath`/`Library`（已反射确认，非 `Libraries`）。
 - **合规确认**：`.gitignore` 放行根级 `LICENSE`/`NOTICE`（Step 1.3 + Step 1.5 校验）；不引入 CmlLib.Core.Installer.Forge；不复制 PCL；新 Forge 文件均带 SPDX GPL-3.0-only 头注。
+
+## 执行状态（2026-10-28）
+
+- 任务 1–8 全部完成；54 个步骤已勾选。
+- 实现提交：`2ab541d feat(forge): add Forge 1.20.1 installer and launch (GPL-3.0-only)`，已推送 `origin/main`。
+- 构建：Debug/Release 均 0 errors（2 个既有 NU1510 警告）。
+- 测试：ForgeHarness 默认 51 PASS；`--install` 解析/6 processors/跳过/损坏修复通过；`--launch` 进入 Forge 主菜单。
+- 任务 7 实测发现并修复 3 个真实缺陷：Maven installer URL 使用错误版本、最终版本档案误带入安装器工具导致 classpath `ResolutionException`、processor 库路径混合分隔符。
+- 已知后续：Forge 下载无独立重试；Java 选择器未扫描 Mojang runtime 目录（本机 JDK 21 已验证可启动）；NeoForge/Quilt/旧版 Forge 未做。
