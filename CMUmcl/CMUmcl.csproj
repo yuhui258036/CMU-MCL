@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>CMUmcl</RootNamespace>
     <AssemblyName>CMUmcl</AssemblyName>
+    <ApplicationIcon>Assets\CMUmcl.ico</ApplicationIcon>
     <Version>0.1.0</Version>
     <Authors>CMUmcl</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
@@ -27,6 +28,7 @@
   <ItemGroup>
     <Resource Include="Assets\InstanceIcons\*.png" />
     <Resource Include="Assets\InstanceIcons\*.jpg" />
+    <Resource Include="Assets\CMUmcl.ico" />
   </ItemGroup>
 
 </Project>

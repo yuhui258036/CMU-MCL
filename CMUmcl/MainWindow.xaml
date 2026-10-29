@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:CMUmcl"
         Title="CMUmcl"
+        Icon="/Assets/CMUmcl.ico"
         Width="1180" Height="760"
         MinWidth="980" MinHeight="620"
         WindowStartupLocation="CenterScreen"

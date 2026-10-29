@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="处理名称冲突"
+        Icon="/Assets/CMUmcl.ico"
         Width="760" Height="600" MinWidth="720" MinHeight="480"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
