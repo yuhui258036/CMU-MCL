@@ -24,6 +24,7 @@ PCL Limited Distribution License，禁止纳入本项目。
 
 以下第三方组件保留各自上游许可，不受本项目整体 GPL-3.0-only 许可影响，仅在其自身许可下随包分发：
 - CmlLib.Core（MIT License）
+- CmlLib.Core.Installer.NeoForge（MIT License）
 - authlib-injector.jar（随包二进制，按其上游许可分发）
 - 各 NuGet 依赖（按其各自许可分发）
 

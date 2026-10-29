@@ -16,16 +16,17 @@ using CmlLib.Core.ProcessBuilder;
 using CMUmcl.Auth;
 using CMUmcl.Content;
 using CMUmcl.Launch.Forge;
+using CMUmcl.Launch.NeoForge;
 
 namespace CMUmcl.Launch
 {
     /// <summary>
-    /// Installs and launches vanilla or Fabric server packs. Does not support
-    /// Forge / NeoForge / Quilt yet (throws a clear message).
+    /// Installs and launches vanilla, Fabric, Forge or NeoForge server packs.
+    /// Quilt is not supported yet (throws a clear message).
     /// </summary>
     public sealed class LaunchService : IDisposable
     {
-        private const string UnsupportedLoaderMessage = "当前版本先支持原版/Fabric，Forge/NeoForge 下一步接入。";
+        private const string UnsupportedLoaderMessage = "当前版本先支持原版/Fabric/Forge/NeoForge，Quilt 下一步接入。";
         private const string AuthlibInjectorSha256 = "9C7F4343E6C82034958FFB48C14A2CB0C85928BE7283103CE17DA00C6D5A7B10";
 
         private readonly YggdrasilClient _yggdrasil;
@@ -178,6 +179,22 @@ namespace CMUmcl.Launch
                 }
 
                 case "neoforge":
+                {
+                    if (string.IsNullOrWhiteSpace(loaderVersion))
+                        throw new LaunchException("缺少 NeoForge 版本信息，无法安装该加载器。");
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 NeoForge", Message = "正在安装 NeoForge…" });
+                    versionName = await NeoForgeLoaderInstaller.InstallAsync(gameVersion, loaderVersion, java, launcher, progress, ct).ConfigureAwait(false);
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 NeoForge", Message = $"正在下载 NeoForge 依赖（{versionName}）…" });
+                    await launcher.InstallAsync(
+                        versionName,
+                        CreateFileProgress("安装 NeoForge", progress),
+                        CreateByteProgress("安装 NeoForge", progress),
+                        ct).ConfigureAwait(false);
+                    break;
+                }
+
                 case "quilt":
                     throw new LaunchException(UnsupportedLoaderMessage);
 

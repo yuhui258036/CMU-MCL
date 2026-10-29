@@ -23,10 +23,10 @@ namespace CMUmcl
             SizeText = $"大小 {FormatUtils.FormatBytes(instance.Pack?.Size ?? 0)}";
 
             string loader = instance.Minecraft?.Loader?.Trim().ToLowerInvariant() ?? string.Empty;
-            if (loader is "neoforge" or "quilt")
+            if (loader is "quilt")
             {
                 HasLoaderNote = true;
-                LoaderNote = "当前先支持原版/Fabric";
+                LoaderNote = "当前先支持原版/Fabric/Forge/NeoForge";
             }
 
             UpdateButtonState(installedRevision);
