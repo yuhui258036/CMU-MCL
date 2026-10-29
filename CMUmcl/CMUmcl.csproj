@@ -29,6 +29,7 @@
     <Resource Include="Assets\InstanceIcons\*.png" />
     <Resource Include="Assets\InstanceIcons\*.jpg" />
     <Resource Include="Assets\CMUmcl.ico" />
+    <Resource Include="Assets\CMUmcl-icon.png" />
   </ItemGroup>
 
 </Project>
