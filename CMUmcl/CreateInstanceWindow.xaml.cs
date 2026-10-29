@@ -10,6 +10,22 @@ using CMUmcl.Launch;
 
 namespace CMUmcl
 {
+    /// <summary>One selectable loader option shown as a chip in the create-instance dialog.</summary>
+    public sealed class LoaderChoice
+    {
+        /// <summary>Stable key stored in the instance metadata (<c>vanilla</c>/<c>fabric</c>/<c>forge</c>/<c>neoforge</c>/<c>quilt</c>).</summary>
+        public string Key { get; init; } = string.Empty;
+
+        /// <summary>User-facing loader name.</summary>
+        public string Name { get; init; } = string.Empty;
+
+        /// <summary>Short letter badge (<c>V</c>/<c>F</c>/<c>Fo</c>/<c>N</c>/<c>Q</c>).</summary>
+        public string Badge { get; init; } = string.Empty;
+
+        /// <summary>One-line description of the loader.</summary>
+        public string Hint { get; init; } = string.Empty;
+    }
+
     /// <summary>
     /// Dialog for creating a local (non-manifest) instance. Loads Minecraft / loader version
     /// lists on open (falling back to manual input when offline), provisions the base game and
@@ -17,6 +33,15 @@ namespace CMUmcl
     /// </summary>
     public partial class CreateInstanceWindow : Window
     {
+        private static readonly IReadOnlyList<LoaderChoice> LoaderChoices = new List<LoaderChoice>
+        {
+            new() { Key = "vanilla",  Name = "原版",    Badge = "V",  Hint = "纯净原版，不安装模组加载器。" },
+            new() { Key = "fabric",   Name = "Fabric",  Badge = "F",  Hint = "轻量快速的模组加载器，模组生态丰富。" },
+            new() { Key = "forge",    Name = "Forge",   Badge = "Fo", Hint = "经典模组加载器，支持大量传统模组。" },
+            new() { Key = "neoforge", Name = "NeoForge", Badge = "N", Hint = "Forge 的分支，面向新版 Minecraft。" },
+            new() { Key = "quilt",    Name = "Quilt",   Badge = "Q",  Hint = "基于 Fabric 的社区加载器，兼容 Fabric 模组。" },
+        };
+
         private readonly LocalInstanceService _service;
         private readonly LaunchService _launchService;
         private readonly VersionCatalogService _catalog;
@@ -37,18 +62,16 @@ namespace CMUmcl
             _catalog = new VersionCatalogService();
             _fabricApi = new FabricApiInstaller();
 
-            LoaderCombo.Items.Add(new ComboBoxItem { Content = "原版", Tag = "vanilla" });
-            LoaderCombo.Items.Add(new ComboBoxItem { Content = "Fabric", Tag = "fabric" });
-            LoaderCombo.Items.Add(new ComboBoxItem { Content = "Forge", Tag = "forge" });
-            LoaderCombo.Items.Add(new ComboBoxItem { Content = "NeoForge", Tag = "neoforge" });
-            LoaderCombo.Items.Add(new ComboBoxItem { Content = "Quilt", Tag = "quilt" });
-            LoaderCombo.SelectedIndex = 0;
+            // Build the loader chips and default to 原版. Controls exist (InitializeComponent has
+            // run), but guard against SelectionChanged firing during item population.
+            LoaderChips.ItemsSource = new List<LoaderChoice>(LoaderChoices);
+            LoaderChips.SelectedIndex = 0;
 
             Loaded += OnLoaded;
             Closed += OnClosed;
         }
 
-        private string SelectedLoader => (LoaderCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "vanilla";
+        private string SelectedLoader => (LoaderChips.SelectedItem as LoaderChoice)?.Key ?? "vanilla";
 
         private string CurrentGameVersion => GameVersionCombo.Text?.Trim() ?? string.Empty;
 
@@ -60,6 +83,9 @@ namespace CMUmcl
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            WireEditableTextChanged();
+            UpdateSummary();
+
             SetStatus("正在加载 Minecraft 版本列表…");
             try
             {
@@ -91,11 +117,26 @@ namespace CMUmcl
             _cts.Dispose();
         }
 
+        /// <summary>
+        /// Hooks the editable text box of each editable combo so typed text updates the live
+        /// summary (SelectionChanged only covers dropdown picks).
+        /// </summary>
+        private void WireEditableTextChanged()
+        {
+            var gameBox = GameVersionCombo.Template?.FindName("PART_EditableTextBox", GameVersionCombo) as TextBox;
+            if (gameBox != null)
+                gameBox.TextChanged += (_, _) => UpdateSummary();
+
+            var versionBox = LoaderVersionCombo.Template?.FindName("PART_EditableTextBox", LoaderVersionCombo) as TextBox;
+            if (versionBox != null)
+                versionBox.TextChanged += (_, _) => UpdateSummary();
+        }
+
         // ------------------------------------------------------------------
         // Selection handling
         // ------------------------------------------------------------------
 
-        private void LoaderCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void LoaderChips_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (LoaderVersionCombo == null) return;
 
@@ -108,6 +149,7 @@ namespace CMUmcl
             if (LoaderVersionCombo == null) return;
 
             ShowError(null);
+            UpdateSummary();
             if (SelectedLoader is not "vanilla")
                 _ = LoadLoaderVersionsAsync();
         }
@@ -117,6 +159,14 @@ namespace CMUmcl
             if (LoaderVersionCombo == null) return;
 
             ShowError(null);
+            UpdateSummary();
+        }
+
+        private void NameBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (SummaryNameText == null) return;
+
+            UpdateSummary();
         }
 
         private void UpdateLoaderUi()
@@ -127,10 +177,14 @@ namespace CMUmcl
             bool isVanilla = loader == "vanilla";
 
             LoaderVersionCombo.IsEnabled = !isVanilla;
-            FabricApiCheck.Visibility = isFabricLike ? Visibility.Visible : Visibility.Collapsed;
+            FabricApiSection.Visibility = isFabricLike ? Visibility.Visible : Visibility.Collapsed;
 
             if (!isFabricLike)
                 FabricApiCheck.IsChecked = false;
+
+            UpdateLoaderVersionHint(loader, isVanilla, isFabricLike);
+            UpdateLoaderHintText();
+            UpdateSummary();
 
             if (isVanilla)
             {
@@ -140,6 +194,41 @@ namespace CMUmcl
             }
 
             _ = LoadLoaderVersionsAsync();
+        }
+
+        private void UpdateLoaderVersionHint(string loader, bool isVanilla, bool isFabricLike)
+        {
+            if (isVanilla)
+                LoaderVersionHintText.Text = "原版实例无需加载器版本。";
+            else if (isFabricLike)
+                LoaderVersionHintText.Text = "可留空，创建时自动选择默认版本。";
+            else
+                LoaderVersionHintText.Text = "必填；从列表选择或手动输入版本。";
+        }
+
+        private void UpdateLoaderHintText()
+        {
+            LoaderHintText.Text = (LoaderChips.SelectedItem as LoaderChoice)?.Hint ?? string.Empty;
+        }
+
+        private void UpdateSummary()
+        {
+            string name = NameBox.Text?.Trim() ?? string.Empty;
+            SummaryNameText.Text = name.Length > 0 ? name : "未命名实例";
+
+            string game = CurrentGameVersion;
+            SummaryGameText.Text = game.Length > 0 ? game : "未选择版本";
+
+            var choice = LoaderChips.SelectedItem as LoaderChoice;
+            string loaderName = choice?.Name ?? "原版";
+            string loaderVersion = CurrentLoaderVersion;
+
+            if (SelectedLoader == "vanilla")
+                SummaryLoaderText.Text = "原版";
+            else if (loaderVersion.Length > 0)
+                SummaryLoaderText.Text = $"{loaderName} {loaderVersion}";
+            else
+                SummaryLoaderText.Text = $"{loaderName}（未选择版本）";
         }
 
         private async Task LoadLoaderVersionsAsync()
@@ -255,9 +344,7 @@ namespace CMUmcl
                 return;
             }
 
-            _creating = true;
-            CreateButton.IsEnabled = false;
-            CancelButton.IsEnabled = false;
+            SetCreatingState(true);
             ShowError(null);
             SetStatus("正在创建实例…");
 
@@ -414,15 +501,32 @@ namespace CMUmcl
             SetStatus(text);
         }
 
+        private void SetCreatingState(bool creating)
+        {
+            _creating = creating;
+
+            NameBox.IsEnabled = !creating;
+            GameVersionCombo.IsEnabled = !creating;
+            LoaderChips.IsEnabled = !creating;
+            LoaderVersionCombo.IsEnabled = !creating && SelectedLoader != "vanilla";
+            FabricApiCheck.IsEnabled = !creating;
+
+            CreateButton.IsEnabled = !creating;
+            CancelButton.IsEnabled = !creating;
+        }
+
         private void ResetCreatingUi()
         {
             SetStatus(null);
-            CreateButton.IsEnabled = true;
-            CancelButton.IsEnabled = true;
-            _creating = false;
+            SetCreatingState(false);
         }
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             DialogResult = false;
         }
