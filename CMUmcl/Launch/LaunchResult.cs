@@ -14,5 +14,11 @@ namespace CMUmcl.Launch
 
         /// <summary>The resolved version id that was launched.</summary>
         public string VersionName { get; init; } = string.Empty;
+
+        /// <summary>
+        /// True when a visible game window was detected before the wait timed out.
+        /// False means the process is still running but no window appeared in time.
+        /// </summary>
+        public bool WindowDetected { get; init; }
     }
 }

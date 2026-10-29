@@ -188,13 +188,27 @@ namespace CMUmcl.Launch
 
             process.Start();
 
-            progress?.Report(new LaunchProgress { Stage = "已启动", Message = "游戏已启动。" });
+            // Wait for the actual game window (owned by the same Java process) before
+            // claiming the game has started. Java may take a while to boot the LWJGL window.
+            progress?.Report(new LaunchProgress { Stage = "启动中", Message = "游戏进程已启动，正在等待游戏窗口…" });
+
+            bool windowDetected = await GameWindowWaiter.WaitForWindowAsync(process, ct).ConfigureAwait(false);
+
+            if (windowDetected)
+            {
+                progress?.Report(new LaunchProgress { Stage = "已启动", Message = "游戏窗口已打开。" });
+            }
+            else
+            {
+                progress?.Report(new LaunchProgress { Stage = "启动中", Message = "游戏进程已启动，但未检测到游戏窗口；可能仍在加载，请查看日志。" });
+            }
 
             return new LaunchResult
             {
                 Process = process,
                 Session = session,
                 VersionName = prepared.VersionName,
+                WindowDetected = windowDetected,
             };
         }
 

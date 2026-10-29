@@ -377,7 +377,14 @@ namespace CMUmcl
                 // The session may have been refreshed during launch.
                 _session = result.Session;
 
-                vm.LaunchStarted();
+                if (result.WindowDetected)
+                {
+                    vm.LaunchStarted();
+                }
+                else
+                {
+                    vm.LaunchWindowPending();
+                }
             }
             catch (LaunchException ex)
             {

@@ -135,6 +135,18 @@ namespace CMUmcl
             StatusText = "游戏已启动";
         }
 
+        /// <summary>
+        /// Marks the launch as pending: the process is running but no game window was
+        /// detected yet. Re-enables the button without claiming the game has started.
+        /// </summary>
+        public void LaunchWindowPending()
+        {
+            IsProgressVisible = false;
+            ButtonEnabled = true;
+            ButtonText = "启动游戏";
+            StatusText = "游戏进程已启动，等待窗口/请查看日志";
+        }
+
         /// <summary>Applies a launch progress report to the card.</summary>
         public void ReportLaunchProgress(LaunchProgress p)
         {
