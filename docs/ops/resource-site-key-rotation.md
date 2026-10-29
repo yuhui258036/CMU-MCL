@@ -78,7 +78,9 @@ ssh -N -L 19443:127.0.0.1:9443 root@103.24.216.15
 
 然后打开 `http://127.0.0.1:19443/admin`。
 
-### 1.3 检查公网资源站
+### 1.3 检查公网资源站（无需 SSH）
+
+以下命令直接在本机 PowerShell 执行，不需要先登录服务器。SSH 只用于管理后台隧道、服务器文件和 systemd 操作。
 
 ```powershell
 curl.exe -fsS https://103.24.216.15/manifest.json -o manifest.json
