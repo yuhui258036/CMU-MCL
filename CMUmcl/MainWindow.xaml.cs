@@ -676,12 +676,36 @@ namespace CMUmcl
                         _migrating = true;
                         SaveSettingsButton.IsEnabled = false;
 
+                        // Detect naming conflicts first and let the user rename each one.
+                        IReadOnlyDictionary<string, MigrationNameOverride>? overrides = null;
+                        IReadOnlyList<MigrationConflict> conflicts = InstanceMigrationService.FindConflicts(
+                            oldInstances,
+                            newInstances,
+                            records);
+                        if (conflicts.Count > 0)
+                        {
+                            var conflictDialog = new MigrationConflictWindow(conflicts, newInstances)
+                            {
+                                Owner = this,
+                            };
+
+                            bool? conflictResult = conflictDialog.ShowDialog();
+                            if (conflictResult != true || conflictDialog.Result == null)
+                            {
+                                SettingsStatusText.Text = "已取消迁移。";
+                                return;
+                            }
+
+                            overrides = conflictDialog.Result;
+                        }
+
                         var progress = new Progress<MigrationProgress>(p => SettingsStatusText.Text = p.Message);
                         MigrationResult result = await InstanceMigrationService.MigrateAsync(
                             oldInstances,
                             newInstances,
                             records,
-                            progress);
+                            progress,
+                            overrides: overrides);
 
                         // Commit: persist settings + records, then remove the old directories.
                         _settings.JavaPath = manual && !string.IsNullOrWhiteSpace(path) ? path : null;

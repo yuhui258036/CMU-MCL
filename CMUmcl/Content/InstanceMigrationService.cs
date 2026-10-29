@@ -34,6 +34,27 @@ namespace CMUmcl.Content
     }
 
     /// <summary>
+    /// One naming conflict found while planning a migration: a source directory whose safe base
+    /// folder name already exists in (or is already planned for) the target, together with the
+    /// collision-free names the service proposes by default.
+    /// </summary>
+    public sealed class MigrationConflict
+    {
+        public string InstanceId { get; init; } = string.Empty;
+        public string SourceDisplayName { get; init; } = string.Empty;
+        public string SourceRelativePath { get; init; } = string.Empty;
+        public string ProposedTargetName { get; init; } = string.Empty;
+        public string ProposedDisplayName { get; init; } = string.Empty;
+    }
+
+    /// <summary>User-chosen replacement names for a conflicted instance.</summary>
+    public sealed class MigrationNameOverride
+    {
+        public string TargetName { get; init; } = string.Empty;
+        public string DisplayName { get; init; } = string.Empty;
+    }
+
+    /// <summary>
     /// Migrates installed instances from one storage directory to another with collision-safe naming.
     /// The source directories are never modified here: they are only copied + verified. The caller
     /// decides when (and whether) to commit and delete the originals. On any copy/verification failure
@@ -48,7 +69,8 @@ namespace CMUmcl.Content
             string targetRoot,
             IReadOnlyDictionary<string, InstanceRecord> records,
             IProgress<MigrationProgress>? progress = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            IReadOnlyDictionary<string, MigrationNameOverride>? overrides = null)
         {
             if (sourceRoot == null) throw new ArgumentNullException(nameof(sourceRoot));
             if (targetRoot == null) throw new ArgumentNullException(nameof(targetRoot));
@@ -65,6 +87,12 @@ namespace CMUmcl.Content
             var createdTargets = new List<string>();
             var plannedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var usedDisplayNames = new HashSet<string>(StringComparer.Ordinal);
+
+            // Validate the overrides up front (before any copy) so an invalid name never leaves
+            // half-migrated instances behind. Their names are reserved so non-overridden records
+            // keep the existing auto-suffix behavior and never collide with them.
+            if (overrides != null)
+                ValidateOverrides(targetFull, overrides, plannedNames, usedDisplayNames);
 
             try
             {
@@ -104,8 +132,21 @@ namespace CMUmcl.Content
                         continue;
                     }
 
-                    string targetName = ResolveTargetName(targetFull, relative, plannedNames);
-                    string? displayName = ResolveDisplayName(record.DisplayName, usedDisplayNames);
+                    string targetName;
+                    string? displayName;
+                    if (overrides != null && overrides.TryGetValue(id, out var nameOverride))
+                    {
+                        // Already validated in ValidateOverrides; use the user's names verbatim.
+                        targetName = nameOverride.TargetName.Trim();
+                        displayName = string.IsNullOrWhiteSpace(nameOverride.DisplayName)
+                            ? null
+                            : nameOverride.DisplayName.Trim();
+                    }
+                    else
+                    {
+                        targetName = ResolveTargetName(targetFull, relative, plannedNames);
+                        displayName = ResolveDisplayName(record.DisplayName, usedDisplayNames);
+                    }
 
                     progress?.Report(new MigrationProgress
                     {
@@ -202,6 +243,25 @@ namespace CMUmcl.Content
 
         private static void ValidateTargets(string sourceFull, string targetFull)
         {
+            ValidateTargetPaths(sourceFull, targetFull);
+
+            // Verify the target location is writable (create + probe file).
+            try
+            {
+                Directory.CreateDirectory(targetFull);
+                string probe = Path.Combine(targetFull, ".cmumcl-write-test-" + Guid.NewGuid().ToString("N"));
+                File.WriteAllText(probe, string.Empty);
+                File.Delete(probe);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"目标目录不可写：{targetFull}", ex);
+            }
+        }
+
+        /// <summary>Path-only checks that never touch the filesystem (safe to run while merely detecting conflicts).</summary>
+        private static void ValidateTargetPaths(string sourceFull, string targetFull)
+        {
             if (string.Equals(sourceFull, targetFull, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("目标目录与源目录相同，无需迁移。");
 
@@ -218,18 +278,120 @@ namespace CMUmcl.Content
             {
                 throw new IOException("目标目录不能是磁盘根目录。");
             }
+        }
 
-            // Verify the target location is writable (create + probe file).
-            try
+        /// <summary>
+        /// Detects naming conflicts that would occur if <paramref name="records"/> were migrated
+        /// from <paramref name="sourceRoot"/> to <paramref name="targetRoot"/>. Never modifies any
+        /// file or directory. Returns only the records that collide (the safe base target folder
+        /// already exists in the target or is already planned by another record), each with the
+        /// collision-free target/display names the service would use by default.
+        /// </summary>
+        public static IReadOnlyList<MigrationConflict> FindConflicts(
+            string sourceRoot,
+            string targetRoot,
+            IReadOnlyDictionary<string, InstanceRecord> records)
+        {
+            if (sourceRoot == null) throw new ArgumentNullException(nameof(sourceRoot));
+            if (targetRoot == null) throw new ArgumentNullException(nameof(targetRoot));
+            if (records == null) throw new ArgumentNullException(nameof(records));
+
+            string sourceFull = NormalizeRoot(sourceRoot, nameof(sourceRoot));
+            string targetFull = NormalizeRoot(targetRoot, nameof(targetRoot));
+            ValidateTargetPaths(sourceFull, targetFull);
+
+            var conflicts = new List<MigrationConflict>();
+            var plannedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var usedDisplayNames = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var kv in records)
             {
-                Directory.CreateDirectory(targetFull);
-                string probe = Path.Combine(targetFull, ".cmumcl-write-test-" + Guid.NewGuid().ToString("N"));
-                File.WriteAllText(probe, string.Empty);
-                File.Delete(probe);
+                string id = kv.Key;
+                InstanceRecord record = kv.Value;
+
+                string relative = string.IsNullOrWhiteSpace(record.InstallPath) ? id : record.InstallPath!;
+                string sourceDir = Path.Combine(sourceFull, relative);
+                if (!Directory.Exists(sourceDir))
+                    continue; // Nothing to migrate — the record carries through unchanged.
+
+                string baseName = SafeName(relative);
+                bool targetConflict = Directory.Exists(Path.Combine(targetFull, baseName)) || plannedNames.Contains(baseName);
+
+                string targetName = ResolveTargetName(targetFull, relative, plannedNames);
+                string? displayName = ResolveDisplayName(record.DisplayName, usedDisplayNames);
+
+                if (targetConflict)
+                {
+                    conflicts.Add(new MigrationConflict
+                    {
+                        InstanceId = id,
+                        SourceDisplayName = record.DisplayName ?? id,
+                        SourceRelativePath = relative,
+                        ProposedTargetName = targetName,
+                        ProposedDisplayName = displayName ?? string.Empty,
+                    });
+                }
+
+                plannedNames.Add(targetName);
+                usedDisplayNames.Add(displayName ?? string.Empty);
             }
-            catch (Exception ex)
+
+            return conflicts;
+        }
+
+        /// <summary>
+        /// Validates a user-supplied folder name for use as an instance target directory.
+        /// Returns an error message when invalid, or null when the name is safe to use.
+        /// </summary>
+        public static string? ValidateFolderName(string? name)
+        {
+            string s = (name ?? string.Empty).Trim();
+            if (s.Length == 0)
+                return "目录名不能为空。";
+
+            if (s.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                return "目录名包含非法字符。";
+
+            if (Path.IsPathRooted(s)
+                || s.IndexOf(Path.DirectorySeparatorChar) >= 0
+                || s.IndexOf(Path.AltDirectorySeparatorChar) >= 0)
             {
-                throw new IOException($"目标目录不可写：{targetFull}", ex);
+                return "目录名必须是单个文件夹名称（不能包含路径分隔符）。";
+            }
+
+            if (s is "." or "..")
+                return "目录名无效。";
+
+            return null;
+        }
+
+        private static void ValidateOverrides(
+            string targetFull,
+            IReadOnlyDictionary<string, MigrationNameOverride> overrides,
+            HashSet<string> plannedNames,
+            HashSet<string> usedDisplayNames)
+        {
+            foreach (var kv in overrides)
+            {
+                string id = kv.Key;
+                MigrationNameOverride o = kv.Value
+                    ?? throw new IOException($"实例 {id} 的自定义名称无效。");
+
+                string targetName = o.TargetName?.Trim() ?? string.Empty;
+
+                string? error = ValidateFolderName(targetName);
+                if (error != null)
+                    throw new IOException($"实例 {id} 的自定义目录名无效：{error}");
+
+                if (Directory.Exists(Path.Combine(targetFull, targetName)))
+                    throw new IOException($"目标目录已存在同名文件夹：{targetName}。");
+
+                if (!plannedNames.Add(targetName))
+                    throw new IOException($"自定义目录名重复：{targetName}。");
+
+                string? displayName = string.IsNullOrWhiteSpace(o.DisplayName) ? null : o.DisplayName.Trim();
+                if (displayName != null)
+                    usedDisplayNames.Add(displayName);
             }
         }
 

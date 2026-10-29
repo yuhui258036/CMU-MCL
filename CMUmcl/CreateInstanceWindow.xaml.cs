@@ -107,6 +107,11 @@ namespace CMUmcl
             {
                 // Window closed before the list finished loading; nothing to do.
             }
+
+            // Ensure the 基本信息 (name) section is visible when the dialog opens, rather than
+            // leaving the form scrolled to the game-version combo that received focus on load.
+            FormScroll.ScrollToTop();
+            NameBox.Focus();
         }
 
         private void OnClosed(object? sender, EventArgs e)
