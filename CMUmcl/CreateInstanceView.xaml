@@ -1,25 +1,27 @@
 <UserControl x:Class="CMUmcl.CreateInstanceView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Foreground="#1F2937"
+             Foreground="#E8E8EC"
              FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI"
              TextOptions.TextFormattingMode="Ideal">
     <UserControl.Resources>
 
-        <!-- ============ Light theme palette (local, does not touch App/MainWindow) ============ -->
-        <SolidColorBrush x:Key="CivBg" Color="#F5F6F8" />
-        <SolidColorBrush x:Key="CivCard" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="CivBorder" Color="#E5E7EB" />
-        <SolidColorBrush x:Key="CivBorderStrong" Color="#D1D5DB" />
-        <SolidColorBrush x:Key="CivText" Color="#1F2937" />
-        <SolidColorBrush x:Key="CivTextMuted" Color="#6B7280" />
-        <SolidColorBrush x:Key="CivTextFaint" Color="#9CA3AF" />
-        <SolidColorBrush x:Key="CivAccent" Color="#2563EB" />
-        <SolidColorBrush x:Key="CivAccentSoft" Color="#EFF6FF" />
-        <SolidColorBrush x:Key="CivAccentBorder" Color="#BFDBFE" />
-        <SolidColorBrush x:Key="CivSuccess" Color="#16A34A" />
-        <SolidColorBrush x:Key="CivSuccessSoft" Color="#ECFDF5" />
-        <SolidColorBrush x:Key="CivDanger" Color="#DC2626" />
+        <!-- ============ Dark theme palette (local, matches App/MainWindow) ============ -->
+        <SolidColorBrush x:Key="CivBg" Color="#1E1E24" />
+        <SolidColorBrush x:Key="CivCard" Color="#282830" />
+        <SolidColorBrush x:Key="CivBorder" Color="#3A3A44" />
+        <SolidColorBrush x:Key="CivBorderStrong" Color="#4A4A56" />
+        <SolidColorBrush x:Key="CivText" Color="#E8E8EC" />
+        <SolidColorBrush x:Key="CivTextMuted" Color="#9A9AA6" />
+        <SolidColorBrush x:Key="CivTextFaint" Color="#6E6E7A" />
+        <SolidColorBrush x:Key="CivAccent" Color="#4C9EEB" />
+        <SolidColorBrush x:Key="CivAccentSoft" Color="#334C9EEB" />
+        <SolidColorBrush x:Key="CivAccentBorder" Color="#804C9EEB" />
+        <SolidColorBrush x:Key="CivSuccess" Color="#53D18F" />
+        <SolidColorBrush x:Key="CivSuccessSoft" Color="#1E3A2D" />
+        <SolidColorBrush x:Key="CivDanger" Color="#E05A5A" />
+        <!-- Light neutral tile behind loader/version icons (the only intentional light element). -->
+        <SolidColorBrush x:Key="CivIconTile" Color="#F2F3F5" />
 
         <!-- ============ Shared button template (overlay hover so accent buttons stay blue) ============ -->
         <ControlTemplate x:Key="CivButtonTemplate" TargetType="Button">
@@ -35,10 +37,10 @@
             </Border>
             <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="overlay" Property="Background" Value="#0A000000" />
+                    <Setter TargetName="overlay" Property="Background" Value="#14FFFFFF" />
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter TargetName="overlay" Property="Background" Value="#14000000" />
+                    <Setter TargetName="overlay" Property="Background" Value="#26000000" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Opacity" Value="0.45" />
@@ -114,10 +116,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#E5E7EB" />
+                                <Setter TargetName="border" Property="Background" Value="#3A3A44" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#D1D5DB" />
+                                <Setter TargetName="border" Property="Background" Value="#4A4A56" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -149,10 +151,10 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccentBorder}" />
-                                <Setter TargetName="overlay" Property="Background" Value="#06000000" />
+                                <Setter TargetName="overlay" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="overlay" Property="Background" Value="#12000000" />
+                                <Setter TargetName="overlay" Property="Background" Value="#26000000" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.6" />
@@ -192,10 +194,10 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccentBorder}" />
-                                <Setter TargetName="overlay" Property="Background" Value="#08000000" />
+                                <Setter TargetName="overlay" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="overlay" Property="Background" Value="#12000000" />
+                                <Setter TargetName="overlay" Property="Background" Value="#26000000" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -547,9 +549,13 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0"
-                                                   Source="pack://application:,,,/Assets/InstanceIcons/grass-block.png"
-                                                   Width="36" Height="36" VerticalAlignment="Center" />
+                                            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="9"
+                                                    Background="{StaticResource CivIconTile}"
+                                                    VerticalAlignment="Center">
+                                                <Image Source="pack://application:,,,/Assets/InstanceIcons/grass-block.png"
+                                                       Width="36" Height="36"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
                                             <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15"
                                                        FontWeight="SemiBold" Foreground="{StaticResource CivText}"
                                                        VerticalAlignment="Center" Margin="14,0,0,0" />
@@ -635,8 +641,13 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0" Source="{Binding IconSource}"
-                                                   Width="40" Height="40" VerticalAlignment="Center" />
+                                            <Border Grid.Column="0" Width="48" Height="48" CornerRadius="10"
+                                                    Background="{StaticResource CivIconTile}"
+                                                    VerticalAlignment="Center">
+                                                <Image Source="{Binding IconSource}"
+                                                       Width="40" Height="40"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
                                             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                                                            Foreground="{StaticResource CivText}" />
@@ -673,8 +684,13 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Image Grid.Column="0" Source="pack://application:,,,/Assets/InstanceIcons/Fabric.png"
-                                       Width="40" Height="40" VerticalAlignment="Center" />
+                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="10"
+                                        Background="{StaticResource CivIconTile}"
+                                        VerticalAlignment="Center">
+                                    <Image Source="pack://application:,,,/Assets/InstanceIcons/Fabric.png"
+                                           Width="40" Height="40"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
                                 <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="Fabric API" FontSize="14" FontWeight="SemiBold"
                                                Foreground="{StaticResource CivText}" />
@@ -760,15 +776,20 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0" Source="{Binding IconSource}"
-                                                   Width="36" Height="36" VerticalAlignment="Center" />
+                                            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="9"
+                                                    Background="{StaticResource CivIconTile}"
+                                                    VerticalAlignment="Center">
+                                                <Image Source="{Binding IconSource}"
+                                                       Width="36" Height="36"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
                                             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Version}" FontSize="15" FontWeight="SemiBold"
                                                            Foreground="{StaticResource CivText}" />
                                                 <TextBlock Text="{Binding Detail}" FontSize="12"
                                                            Foreground="{StaticResource CivTextMuted}" Margin="0,3,0,0" />
                                             </StackPanel>
-                                            <Border Grid.Column="2" Background="#F3F4F6"
+                                            <Border Grid.Column="2" Background="{StaticResource CivBg}"
                                                     BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
                                                     CornerRadius="8" Padding="8,2" Margin="12,0,0,0"
                                                     VerticalAlignment="Center">
@@ -866,7 +887,7 @@
                                Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
                                Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
-                        <Border Background="#F3F4F6" BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
+                        <Border Background="{StaticResource CivCard}" BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
                                 CornerRadius="8" Padding="10,3">
                             <TextBlock x:Name="SuccessGameText" Text="" FontSize="12"
                                        Foreground="{StaticResource CivTextMuted}" />
