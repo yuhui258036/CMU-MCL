@@ -6,9 +6,40 @@ namespace CMUmcl.Content
     /// <summary>Central location for the launcher's on-disk state under %LOCALAPPDATA%\CMUmcl.</summary>
     public static class LauncherPaths
     {
-        public static string RootDirectory { get; } = Path.Combine(
+        private static readonly string DefaultRootDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CMUmcl");
+
+        private static string? _rootOverride;
+
+        /// <summary>
+        /// Test seam: when set to an absolute directory, redirects the root directory and every
+        /// derived path (cache, instances, installed.json, …). Null in production.
+        /// </summary>
+        public static string? RootOverride
+        {
+            get => _rootOverride;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    _rootOverride = null;
+                    return;
+                }
+
+                try
+                {
+                    string full = Path.GetFullPath(value.Trim());
+                    _rootOverride = Path.IsPathRooted(full) ? full : null;
+                }
+                catch (Exception)
+                {
+                    _rootOverride = null;
+                }
+            }
+        }
+
+        public static string RootDirectory => _rootOverride ?? DefaultRootDirectory;
 
         public static string CacheDirectory => Path.Combine(RootDirectory, "cache");
 

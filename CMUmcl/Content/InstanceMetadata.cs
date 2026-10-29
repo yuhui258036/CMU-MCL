@@ -33,6 +33,10 @@ namespace CMUmcl.Content
         [JsonPropertyName("packSha512")]
         public string PackSha512 { get; set; } = string.Empty;
 
+        /// <summary>SHA-256 of the installed .mrpack; used to detect a stale incremental state.</summary>
+        [JsonPropertyName("packSha256")]
+        public string PackSha256 { get; set; } = string.Empty;
+
         [JsonPropertyName("installedAt")]
         public DateTimeOffset InstalledAt { get; set; } = DateTimeOffset.UtcNow;
     }

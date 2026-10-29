@@ -78,6 +78,14 @@ namespace CMUmcl.Content
 
         [JsonPropertyName("size")]
         public long Size { get; set; }
+
+        /// <summary>URL of the per-revision incremental file index (<c>&lt;rev&gt;.files.json</c>), or null for old revisions.</summary>
+        [JsonPropertyName("files_url")]
+        public string? FilesUrl { get; set; }
+
+        /// <summary>Lowercase hex SHA-256 of the file index bytes; null when no index exists.</summary>
+        [JsonPropertyName("files_sha256")]
+        public string? FilesSha256 { get; set; }
     }
 
     public sealed class ManifestServer

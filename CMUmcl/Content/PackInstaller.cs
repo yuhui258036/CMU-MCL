@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -13,6 +15,8 @@ namespace CMUmcl.Content
     /// <summary>
     /// Downloads, verifies and installs a Modrinth (.mrpack) server pack into
     /// <c>%LOCALAPPDATA%\CMUmcl\instances\{id}</c>. Does not require Minecraft/Java.
+    /// Prefers an incremental update via the per-revision file index (files_url/files_sha256)
+    /// and falls back to a full pack install whenever that is unsafe or unavailable.
     /// </summary>
     public sealed class PackInstaller : IDisposable
     {
@@ -37,12 +41,34 @@ namespace CMUmcl.Content
                 AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
             };
 
+            // Pack + index downloads may only be reachable through a local proxy in some
+            // networks; opt the client into one when available (same as VersionCatalogService).
+            IWebProxy? proxy = HttpProxyResolver.ResolveProxy();
+            if (proxy != null)
+            {
+                handler.Proxy = proxy;
+                handler.UseProxy = true;
+            }
+
+            _http = CreateClient(handler);
+        }
+
+        /// <summary>Test seam: uses a caller-supplied handler (e.g. a fake local server).</summary>
+        internal PackInstaller(InstalledStateStore installedState, HttpMessageHandler handler)
+        {
+            _installedState = installedState;
+            _http = CreateClient(handler);
+        }
+
+        private static HttpClient CreateClient(HttpMessageHandler handler)
+        {
             // Downloads (packs + individual files) may be large; use a generous timeout.
-            _http = new HttpClient(handler)
+            var client = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(30),
             };
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            return client;
         }
 
         /// <summary>
@@ -56,17 +82,8 @@ namespace CMUmcl.Content
         {
             if (instance == null) throw new ArgumentNullException(nameof(instance));
 
-            // 1. Download the .mrpack into the pack cache and verify it.
-            string packCacheDir = Path.Combine(LauncherPaths.PackCacheDirectory, instance.Id);
-            string packPath = Path.Combine(packCacheDir, $"{instance.Id}-{instance.Revision}.mrpack");
-
-            await DownloadAndVerifyPackAsync(instance, packPath, progress, ct).ConfigureAwait(false);
-
-            // 2. Read modrinth.index.json from the archive.
-            ModrinthIndex index = ReadIndex(packPath);
-
-            // 3. Resolve (and create) the instance directory under the configured instances root.
-            //    Reuse the recorded install path when it is ours; otherwise pick a collision-free name.
+            // Resolve (and create) the instance directory under the configured instances root.
+            // Reuse the recorded install path when it is ours; otherwise pick a collision-free name.
             string instancesRoot = LauncherPaths.InstancesDirectory;
             Directory.CreateDirectory(instancesRoot);
 
@@ -76,7 +93,48 @@ namespace CMUmcl.Content
             string instanceDir = Path.Combine(instancesRoot, installPath);
             Directory.CreateDirectory(instanceDir);
 
-            // 4. Download the listed files.
+            // Try the incremental path when the manifest advertises a file index.
+            if (HasFileIndex(instance))
+            {
+                bool incrementalDone = await TryInstallIncrementallyAsync(
+                    instance, instanceDir, installPath, suffix, existingDisplayName, progress, ct).ConfigureAwait(false);
+
+                if (incrementalDone)
+                    return;
+
+                progress?.Report(new PackInstallProgress
+                {
+                    Stage = "检查增量更新",
+                    Message = "无法增量更新，回退到完整安装",
+                });
+            }
+
+            await InstallFullAsync(instance, instanceDir, installPath, suffix, existingDisplayName, progress, ct).ConfigureAwait(false);
+        }
+
+        // ------------------------------------------------------------------
+        // Full install path (existing behavior + local state persistence)
+        // ------------------------------------------------------------------
+
+        private async Task InstallFullAsync(
+            ManifestInstance instance,
+            string instanceDir,
+            string installPath,
+            int suffix,
+            string? existingDisplayName,
+            IProgress<PackInstallProgress>? progress,
+            CancellationToken ct)
+        {
+            // 1. Download the .mrpack into the pack cache and verify it.
+            string packCacheDir = Path.Combine(LauncherPaths.PackCacheDirectory, instance.Id);
+            string packPath = Path.Combine(packCacheDir, $"{instance.Id}-{instance.Revision}.mrpack");
+
+            DownloadedFile pack = await DownloadAndVerifyPackAsync(instance, packPath, progress, ct).ConfigureAwait(false);
+
+            // 2. Read modrinth.index.json from the archive.
+            ModrinthIndex index = ReadIndex(packPath);
+
+            // 3. Download the listed files.
             var files = index.Files ?? new List<ModrinthFile>();
             for (int i = 0; i < files.Count; i++)
             {
@@ -92,34 +150,21 @@ namespace CMUmcl.Content
                 await DownloadFileAsync(file, instanceDir, ct).ConfigureAwait(false);
             }
 
-            // 5. Extract overrides/ then client-overrides/ into the instance dir.
+            // 4. Extract overrides/ then client-overrides/ into the instance dir.
             progress?.Report(new PackInstallProgress { Stage = "解压覆盖", Message = "正在应用 overrides" });
             ExtractOverrides(packPath, instanceDir, "overrides", ct);
             progress?.Report(new PackInstallProgress { Stage = "解压覆盖", Message = "正在应用 client-overrides" });
             ExtractOverrides(packPath, instanceDir, "client-overrides", ct);
 
-            // 6. Write instance.json metadata.
-            var metadata = new InstanceMetadata
-            {
-                Id = instance.Id,
-                Name = instance.Name,
-                Revision = instance.Revision,
-                Game = instance.Minecraft?.GameVersion ?? string.Empty,
-                Loader = instance.Minecraft?.Loader ?? string.Empty,
-                LoaderVersion = instance.Minecraft?.LoaderVersion ?? string.Empty,
-                ServerAddress = instance.Server?.Address ?? string.Empty,
-                ServerPort = instance.Server?.Port ?? 0,
-                PackSha512 = instance.Pack?.Sha512 ?? string.Empty,
-                InstalledAt = DateTimeOffset.UtcNow,
-            };
-            await File.WriteAllTextAsync(
-                Path.Combine(instanceDir, "instance.json"),
-                JsonSerializer.Serialize(metadata, JsonOptions),
-                ct).ConfigureAwait(false);
+            // 5. Compute the override hash (matching the server) and persist local state.
+            string overridesSha256 = OverridesHash.Compute(packPath);
+            string packSha256 = PackFileSystem.NormalizeHex(pack.Sha256);
+            PackStateStore.Save(instanceDir, BuildStateFromModrinthIndex(index, instance.Revision, packSha256, overridesSha256));
 
-            // 7. Record the installed revision, install path and display name. A path collision
-            //    (suffix > 0) yields a disambiguated display name; otherwise the existing display
-            //    name (if any) is preserved and null falls back to the manifest name in the UI.
+            // 6. Write instance.json metadata.
+            await WriteInstanceMetadataAsync(instance, instanceDir, packSha256, ct).ConfigureAwait(false);
+
+            // 7. Record the installed revision, install path and display name.
             string? displayName = suffix > 0 ? $"{instance.Name} ({suffix})" : existingDisplayName;
             _installedState.RecordInstall(instance.Id, instance.Revision, installPath, displayName);
 
@@ -133,10 +178,356 @@ namespace CMUmcl.Content
         }
 
         // ------------------------------------------------------------------
+        // Incremental update path
+        // ------------------------------------------------------------------
+
+        private static bool HasFileIndex(ManifestInstance instance)
+            => !string.IsNullOrWhiteSpace(instance.Pack?.FilesUrl)
+               && !string.IsNullOrWhiteSpace(instance.Pack?.FilesSha256);
+
+        /// <summary>
+        /// Attempts an incremental update. Returns true when the update was fully applied;
+        /// false means the caller should fall back to a full install.
+        /// </summary>
+        private async Task<bool> TryInstallIncrementallyAsync(
+            ManifestInstance instance,
+            string instanceDir,
+            string installPath,
+            int suffix,
+            string? existingDisplayName,
+            IProgress<PackInstallProgress>? progress,
+            CancellationToken ct)
+        {
+            // 1. Local state must exist.
+            PackInstallState? state = PackStateStore.Load(instanceDir);
+            if (state is null)
+                return false;
+
+            // 2. The local state must correspond to the currently installed pack.
+            string installedPackSha256 = ReadInstalledPackSha256(instanceDir);
+            if (!string.IsNullOrEmpty(installedPackSha256)
+                && !string.Equals(
+                    PackFileSystem.NormalizeHex(state.PackSha256),
+                    PackFileSystem.NormalizeHex(installedPackSha256),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // 3. Download and verify the file index.
+            progress?.Report(new PackInstallProgress { Stage = "检查增量更新", Message = "正在获取文件索引" });
+
+            PackFileIndex index;
+            try
+            {
+                index = await DownloadAndVerifyIndexAsync(instance, ct).ConfigureAwait(false);
+            }
+            catch (ResourceException)
+            {
+                return false; // index unavailable/bad hash -> full install
+            }
+
+            // 4. Index must describe this manifest revision and pack.
+            if (index.Revision != instance.Revision)
+                return false;
+
+            string manifestPackSha256 = PackFileSystem.NormalizeHex(instance.Pack?.Sha256);
+            if (!string.IsNullOrEmpty(manifestPackSha256)
+                && !string.IsNullOrEmpty(index.PackSha256)
+                && !string.Equals(
+                    PackFileSystem.NormalizeHex(index.PackSha256),
+                    manifestPackSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // 5. Overrides must be unchanged from the installed state; otherwise fall back
+            //    to a full install so config/override edits are re-applied.
+            if (!string.Equals(
+                PackFileSystem.NormalizeHex(index.OverridesSha256),
+                PackFileSystem.NormalizeHex(state.OverridesSha256),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // 6. Plan the update.
+            IncrementalPlan plan = PackIncrementalPlanner.Plan(state, index, instanceDir);
+            if (plan.NeedFullInstall)
+                return false;
+
+            // 7. Apply it.
+            return await ApplyIncrementalAsync(
+                instance, instanceDir, installPath, suffix, existingDisplayName, index, plan, progress, ct).ConfigureAwait(false);
+        }
+
+        private async Task<PackFileIndex> DownloadAndVerifyIndexAsync(ManifestInstance instance, CancellationToken ct)
+        {
+            string url = instance.Pack?.FilesUrl ?? string.Empty;
+            if (!PackFileIndexValidation.IsAllowedFilesUrl(url))
+                throw new ResourceException("文件索引地址无效。");
+
+            string expectedSha256 = PackFileSystem.NormalizeHex(instance.Pack?.FilesSha256);
+            if (expectedSha256.Length == 0)
+                throw new ResourceException("文件索引缺少校验值。");
+
+            byte[] bytes;
+            try
+            {
+                bytes = await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new ResourceException("网络错误，无法下载文件索引。", ex);
+            }
+            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                throw new ResourceException("下载文件索引超时。", ex);
+            }
+
+            string actualSha256 = PackFileSystem.ComputeHex(SHA256.HashData(bytes));
+            if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+                throw new ResourceException("文件索引校验失败（哈希不匹配）。");
+
+            if (!PackFileIndexValidation.TryParse(bytes, out PackFileIndex? index, out string? error))
+                throw new ResourceException("文件索引格式无效：" + (error ?? string.Empty));
+
+            // Reject unsafe paths up front (defense in depth; the planner re-checks too).
+            foreach (PackFileIndexEntry entry in index!.Files)
+            {
+                if (!PackFileIndexValidation.IsSafeRelativePath(entry.Path))
+                    throw new ResourceException($"文件索引包含非法路径：{entry.Path}");
+            }
+
+            return index;
+        }
+
+        /// <summary>
+        /// Downloads changed files into a staging directory, verifies them, then moves them
+        /// into place and deletes removed files. Returns false (and cleans up) on any failure
+        /// so the caller can fall back to a full install as repair.
+        /// </summary>
+        private async Task<bool> ApplyIncrementalAsync(
+            ManifestInstance instance,
+            string instanceDir,
+            string installPath,
+            int suffix,
+            string? existingDisplayName,
+            PackFileIndex index,
+            IncrementalPlan plan,
+            IProgress<PackInstallProgress>? progress,
+            CancellationToken ct)
+        {
+            // Staging lives inside the instance directory (same volume => atomic-ish moves).
+            string stagingDir = Path.Combine(instanceDir, ".cmumcl-staging-" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                Directory.CreateDirectory(stagingDir);
+
+                // 1. Download changed files into staging, verifying each.
+                for (int i = 0; i < plan.Download.Count; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    PackFileIndexEntry entry = plan.Download[i];
+                    progress?.Report(new PackInstallProgress
+                    {
+                        Stage = "下载变化文件",
+                        CurrentFile = i,
+                        TotalFiles = plan.Download.Count,
+                        Message = entry.Path,
+                    });
+
+                    string relPath = PackFileSystem.NormalizeRelativePath(entry.Path);
+                    string stagingTarget = PackFileSystem.ResolveUnder(stagingDir, PackFileSystem.SanitizeRelativePath(relPath));
+
+                    string url = entry.Downloads.First(u => PackFileIndexValidation.IsAllowedDownloadUrl(u));
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(stagingTarget)!);
+                    DownloadedFile downloaded = await DownloadToFileAsync(url, stagingTarget, progress: null, stage: string.Empty, ct).ConfigureAwait(false);
+
+                    if (!IndexEntryMatches(entry, downloaded))
+                        throw new ResourceException($"文件校验失败：{entry.Path}（哈希不匹配）。");
+                }
+
+                // 2. Apply: move staged files into place, then delete removed managed files.
+                progress?.Report(new PackInstallProgress { Stage = "应用增量更新", Message = "正在应用变化文件" });
+
+                foreach (PackFileIndexEntry entry in plan.Download)
+                {
+                    string relPath = PackFileSystem.NormalizeRelativePath(entry.Path);
+                    string stagingTarget = PackFileSystem.ResolveUnder(stagingDir, PackFileSystem.SanitizeRelativePath(relPath));
+                    string finalTarget = PackFileSystem.ResolveUnder(instanceDir, PackFileSystem.SanitizeRelativePath(relPath));
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(finalTarget)!);
+                    File.Move(stagingTarget, finalTarget, overwrite: true);
+                }
+
+                foreach (string relPath in plan.Delete)
+                {
+                    string target = PackFileSystem.ResolveUnder(instanceDir, PackFileSystem.SanitizeRelativePath(relPath));
+                    TryDelete(target);
+                }
+
+                // 3. Persist the new state, instance metadata and installed revision.
+                string newPackSha256 = !string.IsNullOrWhiteSpace(index.PackSha256)
+                    ? PackFileSystem.NormalizeHex(index.PackSha256)
+                    : PackFileSystem.NormalizeHex(instance.Pack?.Sha256);
+
+                PackStateStore.Save(instanceDir, BuildStateFromIndexEntries(index.Files, instance.Revision, newPackSha256, index.OverridesSha256));
+                await WriteInstanceMetadataAsync(instance, instanceDir, newPackSha256, ct).ConfigureAwait(false);
+
+                string? displayName = suffix > 0 ? $"{instance.Name} ({suffix})" : existingDisplayName;
+                _installedState.RecordInstall(instance.Id, instance.Revision, installPath, displayName);
+
+                progress?.Report(new PackInstallProgress
+                {
+                    Stage = "完成",
+                    CurrentFile = plan.Download.Count,
+                    TotalFiles = plan.Download.Count,
+                    Message = $"{instance.Name} 更新完成（增量 {plan.Download.Count} 个文件）",
+                });
+
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Apply failed after downloads may have started; fall back to a full install.
+                return false;
+            }
+            finally
+            {
+                TryDeleteDirectory(stagingDir);
+            }
+        }
+
+        private static bool IndexEntryMatches(PackFileIndexEntry entry, DownloadedFile downloaded)
+        {
+            if (entry.FileSize > 0 && downloaded.Size != entry.FileSize)
+                return false;
+
+            string sha512 = PackFileSystem.NormalizeHex(entry.Hashes?.Sha512);
+            string sha1 = PackFileSystem.NormalizeHex(entry.Hashes?.Sha1);
+
+            if (sha512.Length > 0)
+                return string.Equals(downloaded.Sha512, sha512, StringComparison.OrdinalIgnoreCase);
+            if (sha1.Length > 0)
+                return string.Equals(downloaded.Sha1, sha1, StringComparison.OrdinalIgnoreCase);
+
+            return false; // No hash to verify against (planner prevents this for downloads).
+        }
+
+        // ------------------------------------------------------------------
+        // Local state / metadata helpers
+        // ------------------------------------------------------------------
+
+        private static PackInstallState BuildStateFromModrinthIndex(
+            ModrinthIndex index, int revision, string packSha256, string overridesSha256)
+        {
+            var state = new PackInstallState
+            {
+                FormatVersion = 1,
+                Revision = revision,
+                PackSha256 = PackFileSystem.NormalizeHex(packSha256),
+                OverridesSha256 = PackFileSystem.NormalizeHex(overridesSha256),
+            };
+
+            foreach (ModrinthFile f in index.Files ?? new List<ModrinthFile>())
+            {
+                if (!PackFileIndexValidation.IsSafeRelativePath(f.Path))
+                    continue; // Defensive; unsafe paths never enter state.
+
+                state.Files.Add(new PackInstallStateFile
+                {
+                    Path = PackFileSystem.NormalizeRelativePath(f.Path),
+                    Sha1 = PackFileSystem.NormalizeHex(f.Hashes?.Sha1),
+                    Sha512 = PackFileSystem.NormalizeHex(f.Hashes?.Sha512),
+                    FileSize = f.FileSize ?? 0,
+                });
+            }
+
+            return state;
+        }
+
+        private static PackInstallState BuildStateFromIndexEntries(
+            List<PackFileIndexEntry> entries, int revision, string packSha256, string overridesSha256)
+        {
+            var state = new PackInstallState
+            {
+                FormatVersion = 1,
+                Revision = revision,
+                PackSha256 = PackFileSystem.NormalizeHex(packSha256),
+                OverridesSha256 = PackFileSystem.NormalizeHex(overridesSha256),
+            };
+
+            foreach (PackFileIndexEntry f in entries)
+            {
+                if (!PackFileIndexValidation.IsSafeRelativePath(f.Path))
+                    continue;
+
+                state.Files.Add(new PackInstallStateFile
+                {
+                    Path = PackFileSystem.NormalizeRelativePath(f.Path),
+                    Sha1 = PackFileSystem.NormalizeHex(f.Hashes?.Sha1),
+                    Sha512 = PackFileSystem.NormalizeHex(f.Hashes?.Sha512),
+                    FileSize = f.FileSize,
+                });
+            }
+
+            return state;
+        }
+
+        private static string ReadInstalledPackSha256(string instanceDir)
+        {
+            try
+            {
+                string metaPath = Path.Combine(instanceDir, "instance.json");
+                if (!File.Exists(metaPath))
+                    return string.Empty;
+
+                var meta = JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaPath), JsonOptions);
+                return meta?.PackSha256 ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static async Task WriteInstanceMetadataAsync(
+            ManifestInstance instance, string instanceDir, string packSha256, CancellationToken ct)
+        {
+            var metadata = new InstanceMetadata
+            {
+                Id = instance.Id,
+                Name = instance.Name,
+                Revision = instance.Revision,
+                Game = instance.Minecraft?.GameVersion ?? string.Empty,
+                Loader = instance.Minecraft?.Loader ?? string.Empty,
+                LoaderVersion = instance.Minecraft?.LoaderVersion ?? string.Empty,
+                ServerAddress = instance.Server?.Address ?? string.Empty,
+                ServerPort = instance.Server?.Port ?? 0,
+                PackSha512 = instance.Pack?.Sha512 ?? string.Empty,
+                PackSha256 = PackFileSystem.NormalizeHex(packSha256),
+                InstalledAt = DateTimeOffset.UtcNow,
+            };
+
+            await File.WriteAllTextAsync(
+                Path.Combine(instanceDir, "instance.json"),
+                JsonSerializer.Serialize(metadata, JsonOptions),
+                ct).ConfigureAwait(false);
+        }
+
+        // ------------------------------------------------------------------
         // Pack download + verification
         // ------------------------------------------------------------------
 
-        private async Task DownloadAndVerifyPackAsync(
+        private async Task<DownloadedFile> DownloadAndVerifyPackAsync(
             ManifestInstance instance,
             string packPath,
             IProgress<PackInstallProgress>? progress,
@@ -176,6 +567,8 @@ namespace CMUmcl.Content
                 TryDelete(packPath);
                 throw new ResourceException("整合包校验失败（哈希或大小不匹配），已中止安装。");
             }
+
+            return downloaded;
         }
 
         private static bool VerifyPack(DownloadedFile f, long expectedSize, string sha512, string sha256, string sha1)
@@ -183,9 +576,9 @@ namespace CMUmcl.Content
             if (expectedSize > 0 && f.Size != expectedSize)
                 return false;
 
-            string lower512 = NormalizeHex(sha512);
-            string lower256 = NormalizeHex(sha256);
-            string lower1 = NormalizeHex(sha1);
+            string lower512 = PackFileSystem.NormalizeHex(sha512);
+            string lower256 = PackFileSystem.NormalizeHex(sha256);
+            string lower1 = PackFileSystem.NormalizeHex(sha1);
 
             if (!string.IsNullOrEmpty(lower512))
                 return string.Equals(f.Sha512, lower512, StringComparison.OrdinalIgnoreCase);
@@ -226,8 +619,8 @@ namespace CMUmcl.Content
 
         private async Task DownloadFileAsync(ModrinthFile file, string instanceDir, CancellationToken ct)
         {
-            string relativePath = SanitizeRelativePath(file.Path);
-            string targetPath = ResolveUnder(instanceDir, relativePath);
+            string relativePath = PackFileSystem.SanitizeRelativePath(file.Path);
+            string targetPath = PackFileSystem.ResolveUnder(instanceDir, relativePath);
 
             // Skip if already present and valid.
             if (File.Exists(targetPath) && FileMatchesHashes(targetPath, file))
@@ -273,8 +666,8 @@ namespace CMUmcl.Content
             if (file.FileSize is long size && downloaded.Size != size)
                 return false;
 
-            string lower512 = NormalizeHex(file.Hashes?.Sha512 ?? string.Empty);
-            string lower1 = NormalizeHex(file.Hashes?.Sha1 ?? string.Empty);
+            string lower512 = PackFileSystem.NormalizeHex(file.Hashes?.Sha512);
+            string lower1 = PackFileSystem.NormalizeHex(file.Hashes?.Sha1);
 
             if (!string.IsNullOrEmpty(lower512))
                 return string.Equals(downloaded.Sha512, lower512, StringComparison.OrdinalIgnoreCase);
@@ -289,13 +682,13 @@ namespace CMUmcl.Content
             if (file.FileSize is long size && bytes.LongLength != size)
                 return false;
 
-            string lower512 = NormalizeHex(file.Hashes?.Sha512 ?? string.Empty);
-            string lower1 = NormalizeHex(file.Hashes?.Sha1 ?? string.Empty);
+            string lower512 = PackFileSystem.NormalizeHex(file.Hashes?.Sha512);
+            string lower1 = PackFileSystem.NormalizeHex(file.Hashes?.Sha1);
 
             if (!string.IsNullOrEmpty(lower512))
-                return string.Equals(ComputeHex(SHA512.HashData(bytes)), lower512, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(PackFileSystem.ComputeHex(SHA512.HashData(bytes)), lower512, StringComparison.OrdinalIgnoreCase);
             if (!string.IsNullOrEmpty(lower1))
-                return string.Equals(ComputeHex(SHA1.HashData(bytes)), lower1, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(PackFileSystem.ComputeHex(SHA1.HashData(bytes)), lower1, StringComparison.OrdinalIgnoreCase);
 
             return true;
         }
@@ -375,9 +768,9 @@ namespace CMUmcl.Content
 
                 return new DownloadedFile
                 {
-                    Sha1 = ComputeHex(sha1.GetHashAndReset()),
-                    Sha256 = ComputeHex(sha256.GetHashAndReset()),
-                    Sha512 = ComputeHex(sha512.GetHashAndReset()),
+                    Sha1 = PackFileSystem.ComputeHex(sha1.GetHashAndReset()),
+                    Sha256 = PackFileSystem.ComputeHex(sha256.GetHashAndReset()),
+                    Sha512 = PackFileSystem.ComputeHex(sha512.GetHashAndReset()),
                     Size = total,
                 };
             }
@@ -386,6 +779,11 @@ namespace CMUmcl.Content
         private static void TryDelete(string path)
         {
             try { File.Delete(path); } catch { /* best effort */ }
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            try { Directory.Delete(path, recursive: true); } catch { /* best effort */ }
         }
 
         // ------------------------------------------------------------------
@@ -410,7 +808,7 @@ namespace CMUmcl.Content
                 if (string.IsNullOrEmpty(relative))
                     continue;
 
-                string targetPath = ResolveUnder(instanceDir, SanitizeRelativePath(relative));
+                string targetPath = PackFileSystem.ResolveUnder(instanceDir, PackFileSystem.SanitizeRelativePath(relative));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
@@ -421,7 +819,7 @@ namespace CMUmcl.Content
         }
 
         // ------------------------------------------------------------------
-        // Path safety
+        // Path safety (install directory naming)
         // ------------------------------------------------------------------
 
         /// <summary>
@@ -484,61 +882,6 @@ namespace CMUmcl.Content
             }
 
             return n;
-        }
-
-        private static string SanitizeRelativePath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                throw new ResourceException("路径为空，无法安装。");
-
-            // Normalize separators.
-            string normalized = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-
-            if (Path.IsPathRooted(normalized))
-                throw new ResourceException($"检测到非法路径：{path}");
-
-            // Reject any traversal segment.
-            string[] segments = normalized.Split(Path.DirectorySeparatorChar);
-            foreach (string segment in segments)
-            {
-                if (segment == ".." || segment == ".")
-                    throw new ResourceException($"检测到路径越界：{path}");
-                if (segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                    throw new ResourceException($"检测到非法路径字符：{path}");
-            }
-
-            return normalized;
-        }
-
-        private static string ResolveUnder(string baseDir, string relativePath)
-        {
-            string fullBase = Path.GetFullPath(baseDir);
-            string fullTarget = Path.GetFullPath(Path.Combine(fullBase, relativePath));
-
-            string baseWithSep = fullBase.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
-                ? fullBase
-                : fullBase + Path.DirectorySeparatorChar;
-
-            if (!fullTarget.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
-                throw new ResourceException($"目标路径超出实例目录：{relativePath}");
-
-            return fullTarget;
-        }
-
-        // ------------------------------------------------------------------
-        // Hash helpers
-        // ------------------------------------------------------------------
-
-        private static string NormalizeHex(string? hex)
-        {
-            if (string.IsNullOrWhiteSpace(hex))
-                return string.Empty;
-            return hex.Trim().ToLowerInvariant();
-        }
-
-        private static string ComputeHex(byte[] hash)
-        {
-            return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
         public void Dispose() => _http.Dispose();
