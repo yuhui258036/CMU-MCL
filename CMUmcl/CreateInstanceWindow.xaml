@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="新建本地实例"
-        Width="420" Height="460"
+        Width="440" Height="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -28,7 +28,10 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -41,7 +44,9 @@
 
         <!-- Game version -->
         <TextBlock Grid.Row="3" Text="Minecraft 游戏版本" Style="{StaticResource Label}" />
-        <TextBox x:Name="GameVersionBox" Grid.Row="4" Height="36" Margin="0,0,0,12" />
+        <ComboBox x:Name="GameVersionCombo" Grid.Row="4" Height="36" Margin="0,0,0,12"
+                  HorizontalAlignment="Stretch" IsEditable="True" IsTextSearchEnabled="True"
+                  SelectionChanged="GameVersionCombo_SelectionChanged" />
 
         <!-- Loader -->
         <TextBlock Grid.Row="5" Text="加载器" Style="{StaticResource Label}" />
@@ -50,16 +55,31 @@
 
         <!-- Loader version -->
         <TextBlock Grid.Row="7" Text="加载器版本" Style="{StaticResource Label}" />
-        <TextBox x:Name="LoaderVersionBox" Grid.Row="8" Height="36" Margin="0,0,0,4" />
+        <ComboBox x:Name="LoaderVersionCombo" Grid.Row="8" Height="36" Margin="0,0,0,4"
+                  HorizontalAlignment="Stretch" IsEditable="True" IsTextSearchEnabled="True"
+                  SelectionChanged="LoaderVersionCombo_SelectionChanged" />
         <TextBlock Grid.Row="9" Text="Fabric / Quilt 可留空（自动选择默认版本）；Forge / NeoForge 必填。" FontSize="11"
                    Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,8" TextWrapping="Wrap" />
 
+        <!-- Fabric API -->
+        <CheckBox x:Name="FabricApiCheck" Grid.Row="10" Content="安装 Fabric API"
+                  IsChecked="False" Visibility="Collapsed" Margin="0,0,0,6" />
+
+        <!-- Status / progress -->
+        <TextBlock x:Name="StatusText" Grid.Row="11" Text="" Foreground="{StaticResource MutedTextBrush}"
+                   FontSize="12" TextWrapping="Wrap" MinHeight="16" Margin="0,0,0,4" />
+
         <!-- Error -->
-        <TextBlock x:Name="ErrorText" Grid.Row="10" Text="" Foreground="{StaticResource ErrorBrush}"
-                   FontSize="13" TextWrapping="Wrap" VerticalAlignment="Bottom" MinHeight="18" Margin="0,8,0,8" />
+        <TextBlock x:Name="ErrorText" Grid.Row="12" Text="" Foreground="{StaticResource ErrorBrush}"
+                   FontSize="13" TextWrapping="Wrap" MinHeight="18" Margin="0,4,0,4" />
+
+        <!-- First-launch note -->
+        <TextBlock Grid.Row="13" Text="提示：首次启动会自动下载 Minecraft 与加载器文件。"
+                   FontSize="11" Foreground="{StaticResource MutedTextBrush}"
+                   TextWrapping="Wrap" Margin="0,8,0,8" />
 
         <!-- Buttons -->
-        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="14" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="CancelButton" Content="取消" Width="96" Height="34" Margin="0,0,10,0"
                     Click="CancelButton_Click" />
             <Button x:Name="CreateButton" Content="创建" Width="96" Height="34"
