@@ -20,8 +20,8 @@
         <SolidColorBrush x:Key="CivSuccess" Color="#53D18F" />
         <SolidColorBrush x:Key="CivSuccessSoft" Color="#1E3A2D" />
         <SolidColorBrush x:Key="CivDanger" Color="#E05A5A" />
-        <!-- Light neutral tile behind loader/version icons (the only intentional light element). -->
-        <SolidColorBrush x:Key="CivIconTile" Color="#F2F3F5" />
+        <!-- Transparent tile behind loader/version icons (icons are transparent PNGs, no white square). -->
+        <SolidColorBrush x:Key="CivIconTile" Color="Transparent" />
 
         <!-- ============ Shared button template (overlay hover so accent buttons stay blue) ============ -->
         <ControlTemplate x:Key="CivButtonTemplate" TargetType="Button">

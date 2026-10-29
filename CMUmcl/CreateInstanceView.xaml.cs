@@ -134,7 +134,7 @@ namespace CMUmcl
             InitializeComponent();
 
             _loaderCards.Add(new LoaderCard("vanilla", "Minecraft", "pack://application:,,,/Assets/InstanceIcons/grass-block.png"));
-            _loaderCards.Add(new LoaderCard("forge", "Forge", "pack://application:,,,/Assets/InstanceIcons/Forge.jpg"));
+            _loaderCards.Add(new LoaderCard("forge", "Forge", "pack://application:,,,/Assets/InstanceIcons/Forge.png"));
             _loaderCards.Add(new LoaderCard("neoforge", "NeoForge", "pack://application:,,,/Assets/InstanceIcons/NeoForge.png"));
             _loaderCards.Add(new LoaderCard("fabric", "Fabric", "pack://application:,,,/Assets/InstanceIcons/Fabric.png"));
             _loaderCards.Add(new LoaderCard("quilt", "Quilt", "pack://application:,,,/Assets/InstanceIcons/Quilt.png"));
@@ -801,7 +801,7 @@ namespace CMUmcl
         private static string LoaderIconSource(string loader) => loader switch
         {
             "fabric" => "pack://application:,,,/Assets/InstanceIcons/Fabric.png",
-            "forge" => "pack://application:,,,/Assets/InstanceIcons/Forge.jpg",
+            "forge" => "pack://application:,,,/Assets/InstanceIcons/Forge.png",
             "neoforge" => "pack://application:,,,/Assets/InstanceIcons/NeoForge.png",
             "quilt" => "pack://application:,,,/Assets/InstanceIcons/Quilt.png",
             _ => "pack://application:,,,/Assets/InstanceIcons/grass-block.png",

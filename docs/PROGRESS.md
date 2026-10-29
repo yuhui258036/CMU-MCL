@@ -38,7 +38,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
-| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：56/56 PASS；LocalInstanceNaming：16/16 PASS；VersionCatalog：921 个版本（103 正式版 / 748 快照 / 9 愚人节 / 61 远古版本），Fabric/Forge/Quilt/NeoForge 版本列表与映射通过；Fabric API 下载校验通过；创建流程已在应用中人工打开验证 |
+| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：56/56 PASS；LocalInstanceNaming：16/16 PASS；VersionCatalog：921 个版本（103 正式版 / 748 快照 / 9 愚人节 / 61 远古版本），Fabric 26.3 255 / Quilt 1.21.1 307 / NeoForge 26.3 95 / Forge 1.21.1 69 个加载器版本；本地代理 127.0.0.1:7890 验证通过；Fabric API 下载校验通过；创建流程已在应用中人工打开验证 |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
 | 自动 Java | `java-runtime-epsilon` / Java 25.0.1，约 100.2MB，411 files，`.complete` 正常 |
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
@@ -76,6 +76,8 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - Forge/NeoForge 版本列表已接入 Maven；NeoForge 源站在当前网络不可达时回退手动输入。
 - 实例迁移冲突默认自动加后缀；迁移前可打开逐项手动改名对话框。
 - 创建流程目前只支持原版 / Fabric / Forge / NeoForge / Quilt；OptiFine、QSL/QFAPI 与“导入已有”暂未接入。
+- 创建实例图标使用 YSUMCL 素材，背景透明；Forge 使用去除白底后的 `Forge.png`。
+- 版本列表会自动探测本机代理（`CMUMCL_PROXY` 优先，其次系统代理，最后 127.0.0.1:7890/7891/1080）；若网络仍不可达，Fabric/Quilt/NeoForge 列表会为空而不是崩溃。
 - 旧 `CreateInstanceWindow` 保留未调用，后续可删除；新的创建流程是主窗口内的 `CreateInstanceView`。
 - 加载器版本页目前显示兼容游戏版本/稳定/构建信息；Forge/NeoForge Maven 不提供发布时间，因此没有 HMCL 截图中的日期列。
 - 本地实例暂无删除/修复入口；清单获取失败时本地卡片也随主页面一起不可见。

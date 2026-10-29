@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -131,6 +132,15 @@ namespace CMUmcl.Content
             {
                 AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
             };
+
+            // Loader version-list endpoints (Fabric/Quilt/NeoForge) can only be reached
+            // through a local proxy in some networks; opt the client into one when available.
+            IWebProxy? proxy = HttpProxyResolver.ResolveProxy();
+            if (proxy != null)
+            {
+                handler.Proxy = proxy;
+                handler.UseProxy = true;
+            }
 
             _http = new HttpClient(handler) { Timeout = VersionListTimeout };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
