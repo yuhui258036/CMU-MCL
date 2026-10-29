@@ -26,15 +26,18 @@ namespace CMUmcl
         private AppSettings _settings;
 
         private readonly ObservableCollection<PackCardViewModel> _cards = new();
+        private readonly ObservableCollection<InstanceCardViewModel> _instances = new();
 
         private bool _loading;
-        private bool _isSettingsView;
         private bool _migrating;
 
+        private enum MainPage { Packs, Instances, Settings }
         private enum PacksContentState { Loading, Cards, Empty, Error }
 
+        private MainPage _currentPage = MainPage.Packs;
         private PacksContentState _packsState = PacksContentState.Cards;
-        private string _headerStatusText = string.Empty;
+        private string _packsHeaderStatus = string.Empty;
+        private string _instancesHeaderStatus = string.Empty;
 
         /// <summary>Raised when the user clicks "退出登录" (before the window closes).</summary>
         public event Action? LogoutRequested;
@@ -62,6 +65,7 @@ namespace CMUmcl
 
             AccountNameText.Text = session.SelectedProfileName;
             CardsList.ItemsSource = _cards;
+            InstancesList.ItemsSource = _instances;
 
             _settings = _settingsStore.Load();
             InitializeSettingsPage();
@@ -73,13 +77,115 @@ namespace CMUmcl
             await LoadManifestAsync();
         }
 
-        private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+        // ------------------------------------------------------------------
+        // Navigation
+        // ------------------------------------------------------------------
+
+        private void PacksNavButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_loading) return;
-            await LoadManifestAsync();
+            if (_currentPage != MainPage.Packs)
+                ShowPacksView();
         }
 
-        private async void NewInstanceButton_Click(object sender, RoutedEventArgs e)
+        private void InstancesNavButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentPage != MainPage.Instances)
+                ShowInstancesView();
+        }
+
+        private void SettingsNavButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentPage != MainPage.Settings)
+                ShowSettingsView();
+        }
+
+        private void ViewInstancesButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowInstancesView();
+        }
+
+        private void UpdateNavStyles()
+        {
+            PacksNavButton.Style = (Style)FindResource(_currentPage == MainPage.Packs ? "NavItemActive" : "NavItem");
+            InstancesNavButton.Style = (Style)FindResource(_currentPage == MainPage.Instances ? "NavItemActive" : "NavItem");
+            SettingsNavButton.Style = (Style)FindResource(_currentPage == MainPage.Settings ? "NavItemActive" : "NavItem");
+        }
+
+        private void ShowPacksView()
+        {
+            _currentPage = MainPage.Packs;
+            UpdateNavStyles();
+
+            HeaderTitleText.Text = "服务器整合包";
+            HeaderStatusText.Text = _packsHeaderStatus;
+            NewInstanceButton.Visibility = Visibility.Collapsed;
+            RefreshButton.Visibility = Visibility.Visible;
+
+            SettingsScroll.Visibility = Visibility.Collapsed;
+            InstancesScroll.Visibility = Visibility.Collapsed;
+            InstancesEmptyStateText.Visibility = Visibility.Collapsed;
+
+            ApplyPacksVisibility();
+        }
+
+        private void ShowInstancesView()
+        {
+            _currentPage = MainPage.Instances;
+            UpdateNavStyles();
+
+            HeaderTitleText.Text = "实例";
+            NewInstanceButton.Visibility = Visibility.Visible;
+            RefreshButton.Visibility = Visibility.Visible;
+
+            SettingsScroll.Visibility = Visibility.Collapsed;
+            CardsScroll.Visibility = Visibility.Collapsed;
+            EmptyStateText.Visibility = Visibility.Collapsed;
+            LoadingState.Visibility = Visibility.Collapsed;
+            ErrorState.Visibility = Visibility.Collapsed;
+
+            RefreshInstances();
+        }
+
+        private void ShowSettingsView()
+        {
+            _currentPage = MainPage.Settings;
+            UpdateNavStyles();
+
+            HeaderTitleText.Text = "设置";
+            HeaderStatusText.Text = string.Empty;
+            RefreshButton.Visibility = Visibility.Collapsed;
+            NewInstanceButton.Visibility = Visibility.Collapsed;
+
+            CardsScroll.Visibility = Visibility.Collapsed;
+            EmptyStateText.Visibility = Visibility.Collapsed;
+            LoadingState.Visibility = Visibility.Collapsed;
+            ErrorState.Visibility = Visibility.Collapsed;
+            InstancesScroll.Visibility = Visibility.Collapsed;
+            InstancesEmptyStateText.Visibility = Visibility.Collapsed;
+
+            SettingsScroll.Visibility = Visibility.Visible;
+            SettingsStatusText.Text = string.Empty;
+        }
+
+        private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+        {
+            switch (_currentPage)
+            {
+                case MainPage.Packs:
+                    if (_loading) return;
+                    await LoadManifestAsync();
+                    break;
+
+                case MainPage.Instances:
+                    RefreshInstances();
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        private void NewInstanceButton_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new CreateInstanceWindow(_localInstanceService)
             {
@@ -89,9 +195,13 @@ namespace CMUmcl
             bool? ok = dialog.ShowDialog();
             if (ok == true && dialog.Result != null)
             {
-                await LoadManifestAsync();
+                ShowInstancesView();
             }
         }
+
+        // ------------------------------------------------------------------
+        // 服务器整合包 page (catalog only: install/update, no launch)
+        // ------------------------------------------------------------------
 
         private async Task LoadManifestAsync()
         {
@@ -122,8 +232,6 @@ namespace CMUmcl
                     _cards.Add(new PackCardViewModel(instance, installedRevision, displayName));
                 }
 
-                AddLocalCards();
-
                 ShowCards();
             }
             catch (ResourceException ex)
@@ -145,61 +253,6 @@ namespace CMUmcl
         {
             if (sender is Button { DataContext: PackCardViewModel vm })
             {
-                await HandleCardActionAsync(vm);
-            }
-        }
-
-        /// <summary>Re-reads display names from the installed-state store (used after a migration).</summary>
-        private void RefreshCardDisplayNames()
-        {
-            foreach (PackCardViewModel vm in _cards)
-                vm.SetDisplayName(_installedState.GetDisplayName(vm.InstanceId));
-        }
-
-        /// <summary>Adds locally-created instances (ids starting with <c>local:</c>) to the card list.</summary>
-        private void AddLocalCards()
-        {
-            foreach (var kv in _installedState.ListRecords())
-            {
-                if (!kv.Key.StartsWith("local:", StringComparison.Ordinal))
-                    continue;
-
-                string id = kv.Key;
-                string installPath = _installedState.GetInstallPath(id);
-                string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, installPath);
-                string metaPath = Path.Combine(instanceDir, "instance.json");
-
-                InstanceMetadata? metadata = null;
-                if (File.Exists(metaPath))
-                {
-                    try
-                    {
-                        metadata = System.Text.Json.JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaPath));
-                    }
-                    catch
-                    {
-                        metadata = null;
-                    }
-                }
-
-                // A local instance cannot launch without its metadata; skip broken records.
-                if (metadata == null)
-                    continue;
-
-                string displayName = kv.Value.DisplayName ?? metadata.Name ?? id;
-                _cards.Add(new PackCardViewModel(id, metadata, displayName));
-            }
-        }
-
-        /// <summary>Dispatches the card button action: launch if installed/current, otherwise install/update.</summary>
-        private async Task HandleCardActionAsync(PackCardViewModel vm)
-        {
-            if (vm.IsLaunchable)
-            {
-                await LaunchAsync(vm);
-            }
-            else
-            {
                 await InstallAsync(vm);
             }
         }
@@ -212,7 +265,7 @@ namespace CMUmcl
 
             try
             {
-                await _installer.InstallAsync(vm.Instance!, progress);
+                await _installer.InstallAsync(vm.Instance, progress);
                 vm.Complete();
             }
             catch (ResourceException ex)
@@ -229,7 +282,73 @@ namespace CMUmcl
             }
         }
 
-        private async Task LaunchAsync(PackCardViewModel vm)
+        /// <summary>Re-reads display names from the installed-state store (used after a migration).</summary>
+        private void RefreshCardDisplayNames()
+        {
+            foreach (PackCardViewModel vm in _cards)
+                vm.SetDisplayName(_installedState.GetDisplayName(vm.InstanceId));
+        }
+
+        // ------------------------------------------------------------------
+        // 实例 page (all installed instances: server packs + local)
+        // ------------------------------------------------------------------
+
+        private void RefreshInstances()
+        {
+            _instances.Clear();
+            foreach (var kv in _installedState.ListRecords())
+            {
+                _instances.Add(BuildInstanceCard(kv.Key, kv.Value));
+            }
+
+            _instancesHeaderStatus = $"共 {_instances.Count} 个实例";
+            HeaderStatusText.Text = _instancesHeaderStatus;
+            ApplyInstancesVisibility();
+        }
+
+        private static InstanceCardViewModel BuildInstanceCard(string id, InstanceRecord record)
+        {
+            bool isLocal = id.StartsWith("local:", StringComparison.Ordinal);
+
+            string installPath = string.IsNullOrWhiteSpace(record.InstallPath) ? id : record.InstallPath!;
+            string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, installPath);
+
+            InstanceMetadata? metadata = null;
+            string metaPath = Path.Combine(instanceDir, "instance.json");
+            if (File.Exists(metaPath))
+            {
+                try
+                {
+                    metadata = System.Text.Json.JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaPath));
+                }
+                catch
+                {
+                    metadata = null;
+                }
+            }
+
+            string displayName = record.DisplayName ?? metadata?.Name ?? id;
+            string source = isLocal ? "本地实例" : "服务器整合包";
+
+            return new InstanceCardViewModel(id, displayName, source, metadata, instanceDir);
+        }
+
+        private void ApplyInstancesVisibility()
+        {
+            bool empty = _instances.Count == 0;
+            InstancesScroll.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            InstancesEmptyStateText.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private async void LaunchButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { DataContext: InstanceCardViewModel vm })
+            {
+                await LaunchInstanceAsync(vm);
+            }
+        }
+
+        private async Task LaunchInstanceAsync(InstanceCardViewModel vm)
         {
             vm.BeginLaunch();
 
@@ -237,9 +356,7 @@ namespace CMUmcl
 
             try
             {
-                LaunchResult result = vm.IsLocal
-                    ? await _launchService.LaunchLocalAsync(vm.InstanceId, _session, progress)
-                    : await _launchService.LaunchAsync(vm.Instance!, _session, progress);
+                LaunchResult result = await _launchService.LaunchLocalAsync(vm.InstanceId, _session, progress);
 
                 // The session may have been refreshed during launch.
                 _session = result.Session;
@@ -262,68 +379,32 @@ namespace CMUmcl
             }
         }
 
+        private void OpenInstanceDirButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { DataContext: InstanceCardViewModel vm })
+                return;
+
+            try
+            {
+                string dir = vm.InstallPath;
+                Directory.CreateDirectory(dir);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = dir,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法打开目录：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
             _store.ClearSession();
             LogoutRequested?.Invoke();
             Close();
-        }
-
-        // ------------------------------------------------------------------
-        // Navigation (server packs vs. settings)
-        // ------------------------------------------------------------------
-
-        private void PacksNavButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_isSettingsView)
-                ShowPacksView();
-        }
-
-        private void SettingsNavButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (!_isSettingsView)
-                ShowSettingsView();
-        }
-
-        private void ShowSettingsView()
-        {
-            _isSettingsView = true;
-            _headerStatusText = HeaderStatusText.Text;
-
-            PacksNavButton.Style = (Style)FindResource("NavItem");
-            SettingsNavButton.Style = (Style)FindResource("NavItemActive");
-
-            HeaderTitleText.Text = "设置";
-            HeaderStatusText.Text = string.Empty;
-            RefreshButton.Visibility = Visibility.Collapsed;
-            NewInstanceButton.Visibility = Visibility.Collapsed;
-
-            SettingsScroll.Visibility = Visibility.Visible;
-            CardsScroll.Visibility = Visibility.Collapsed;
-            EmptyStateText.Visibility = Visibility.Collapsed;
-            LoadingState.Visibility = Visibility.Collapsed;
-            ErrorState.Visibility = Visibility.Collapsed;
-            NoLaunchNote.Visibility = Visibility.Collapsed;
-
-            SettingsStatusText.Text = string.Empty;
-        }
-
-        private void ShowPacksView()
-        {
-            _isSettingsView = false;
-
-            PacksNavButton.Style = (Style)FindResource("NavItemActive");
-            SettingsNavButton.Style = (Style)FindResource("NavItem");
-
-            HeaderTitleText.Text = "服务器整合包";
-            HeaderStatusText.Text = _headerStatusText;
-            RefreshButton.Visibility = Visibility.Visible;
-            NewInstanceButton.Visibility = Visibility.Visible;
-
-            SettingsScroll.Visibility = Visibility.Collapsed;
-            NoLaunchNote.Visibility = Visibility.Visible;
-
-            ApplyPacksVisibility();
         }
 
         // ------------------------------------------------------------------
@@ -757,16 +838,16 @@ namespace CMUmcl
             _packsState = PacksContentState.Error;
             ApplyPacksVisibility();
             ErrorText.Text = message;
-            _headerStatusText = "加载失败";
-            HeaderStatusText.Text = _headerStatusText;
+            _packsHeaderStatus = "加载失败";
+            HeaderStatusText.Text = _packsHeaderStatus;
         }
 
         private void ShowCards()
         {
             _packsState = _cards.Count == 0 ? PacksContentState.Empty : PacksContentState.Cards;
             ApplyPacksVisibility();
-            _headerStatusText = $"共 {_cards.Count} 个整合包";
-            HeaderStatusText.Text = _headerStatusText;
+            _packsHeaderStatus = $"共 {_cards.Count} 个整合包";
+            HeaderStatusText.Text = _packsHeaderStatus;
         }
 
         private void ApplyPacksVisibility()

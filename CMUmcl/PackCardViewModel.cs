@@ -4,17 +4,15 @@ using CMUmcl.Content;
 
 namespace CMUmcl
 {
-    /// <summary>View model backing one server-pack or local-instance card in the main window.</summary>
+    /// <summary>View model backing one server-pack card on the 服务器整合包 page.</summary>
     public sealed class PackCardViewModel : INotifyPropertyChanged
     {
-        private readonly ManifestInstance? _instance;
-        private readonly string _instanceId;
+        private readonly ManifestInstance _instance;
 
         /// <summary>Server-pack card backed by a manifest entry.</summary>
         public PackCardViewModel(ManifestInstance instance, int? installedRevision, string? displayName = null)
         {
             _instance = instance;
-            _instanceId = instance.Id;
 
             Name = string.IsNullOrWhiteSpace(displayName) ? instance.Name : displayName!;
             Description = string.IsNullOrWhiteSpace(instance.Description)
@@ -35,32 +33,8 @@ namespace CMUmcl
             UpdateButtonState(installedRevision);
         }
 
-        /// <summary>Local-instance card backed by an on-disk instance.json (no manifest entry).</summary>
-        public PackCardViewModel(string localId, InstanceMetadata metadata, string displayName)
-        {
-            _instance = null;
-            _instanceId = localId;
-            IsLocal = true;
-
-            Name = displayName;
-            Description = "本地实例";
-            RevisionText = string.Empty;
-            GameText = $"Minecraft {metadata.Game ?? "?"} · {FormatLoader(metadata.Loader, metadata.LoaderVersion)}";
-            ServerText = string.Empty;
-            SizeText = "本地实例";
-            HasLoaderNote = false;
-
-            ButtonText = "启动游戏";
-            ButtonEnabled = true;
-            IsLaunchable = true;
-            StatusText = "已就绪";
-        }
-
-        public ManifestInstance? Instance => _instance;
-        public string InstanceId => _instanceId;
-
-        /// <summary>True for locally-created instances (no manifest entry, no pack install/update path).</summary>
-        public bool IsLocal { get; }
+        public ManifestInstance Instance => _instance;
+        public string InstanceId => _instance.Id;
 
         private string _name = string.Empty;
         public string Name
@@ -77,9 +51,6 @@ namespace CMUmcl
         public bool HasLoaderNote { get; }
         public string LoaderNote { get; } = string.Empty;
 
-        /// <summary>True when the instance is installed at the current revision and can be launched.</summary>
-        public bool IsLaunchable { get; private set; }
-
         private string _buttonText = "下载并安装";
         public string ButtonText
         {
@@ -92,6 +63,22 @@ namespace CMUmcl
         {
             get => _buttonEnabled;
             private set { _buttonEnabled = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>True when the primary (install/update) button is visible.</summary>
+        private bool _isInstallVisible = true;
+        public bool IsInstallVisible
+        {
+            get => _isInstallVisible;
+            private set { _isInstallVisible = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>True when the secondary (查看实例) button is visible (installed current).</summary>
+        private bool _isViewInstancesVisible;
+        public bool IsViewInstancesVisible
+        {
+            get => _isViewInstancesVisible;
+            private set { _isViewInstancesVisible = value; OnPropertyChanged(); }
         }
 
         private bool _isProgressVisible;
@@ -129,29 +116,10 @@ namespace CMUmcl
             {
                 Name = displayName!;
             }
-            else if (_instance != null)
+            else
             {
                 Name = _instance.Name;
             }
-            // Local cards keep their recorded name when the store has no override.
-        }
-
-        /// <summary>Formats a loader/version pair for display (local cards), with a friendly label for vanilla.</summary>
-        private static string FormatLoader(string? loader, string? loaderVersion)
-        {
-            string normalized = (loader ?? string.Empty).Trim().ToLowerInvariant();
-            string label = normalized switch
-            {
-                "" or "vanilla" => "原版",
-                "fabric" => "Fabric",
-                "forge" => "Forge",
-                "neoforge" => "NeoForge",
-                "quilt" => "Quilt",
-                _ => (loader ?? string.Empty).Trim(),
-            };
-
-            string version = (loaderVersion ?? string.Empty).Trim();
-            return string.IsNullOrEmpty(version) ? label : $"{label} {version}";
         }
 
         /// <summary>Sets the card into an idle state reflecting the installed revision.</summary>
@@ -165,22 +133,25 @@ namespace CMUmcl
             {
                 ButtonText = "下载并安装";
                 ButtonEnabled = true;
+                IsInstallVisible = true;
+                IsViewInstancesVisible = false;
                 StatusText = "尚未安装";
-                IsLaunchable = false;
             }
-            else if (installedRevision.Value >= _instance!.Revision)
+            else if (installedRevision.Value >= _instance.Revision)
             {
-                ButtonText = "启动游戏";
-                ButtonEnabled = true;
-                StatusText = $"已安装（r{installedRevision.Value}）";
-                IsLaunchable = true;
+                ButtonText = string.Empty;
+                ButtonEnabled = false;
+                IsInstallVisible = false;
+                IsViewInstancesVisible = true;
+                StatusText = $"已安装 r{installedRevision.Value}";
             }
             else
             {
-                ButtonText = "更新";
+                ButtonText = $"更新到 r{_instance.Revision}";
                 ButtonEnabled = true;
-                StatusText = $"可更新到 r{_instance!.Revision}";
-                IsLaunchable = false;
+                IsInstallVisible = true;
+                IsViewInstancesVisible = false;
+                StatusText = $"已安装 r{installedRevision.Value}，可更新到 r{_instance.Revision}";
             }
         }
 
@@ -189,6 +160,8 @@ namespace CMUmcl
         {
             ButtonEnabled = false;
             ButtonText = "安装中…";
+            IsInstallVisible = true;
+            IsViewInstancesVisible = false;
             IsProgressVisible = true;
             IsIndeterminate = true;
             ProgressValue = 0;
@@ -204,46 +177,18 @@ namespace CMUmcl
             StatusText = message;
         }
 
-        /// <summary>Marks the install as complete (now launchable).</summary>
+        /// <summary>Marks the install as complete (installed current; now offers 查看实例).</summary>
         public void Complete()
         {
             IsProgressVisible = false;
-            ButtonText = "启动游戏";
-            ButtonEnabled = true;
-            IsLaunchable = true;
-            StatusText = $"已安装（r{_instance!.Revision}）";
-        }
-
-        /// <summary>Enters the busy (launching) state.</summary>
-        public void BeginLaunch()
-        {
+            ButtonText = string.Empty;
             ButtonEnabled = false;
-            ButtonText = "启动中…";
-            IsProgressVisible = true;
-            IsIndeterminate = true;
-            ProgressValue = 0;
-            StatusText = "准备启动…";
+            IsInstallVisible = false;
+            IsViewInstancesVisible = true;
+            StatusText = $"已安装 r{_instance.Revision}";
         }
 
-        /// <summary>Marks the launch as failed and re-enables the button.</summary>
-        public void LaunchFail(string message)
-        {
-            IsProgressVisible = false;
-            ButtonEnabled = true;
-            ButtonText = "启动游戏";
-            StatusText = message;
-        }
-
-        /// <summary>Marks the launch as started (game process running).</summary>
-        public void LaunchStarted()
-        {
-            IsProgressVisible = false;
-            ButtonEnabled = true;
-            ButtonText = "启动游戏";
-            StatusText = "游戏已启动";
-        }
-
-        /// <summary>Applies a progress report to the card.</summary>
+        /// <summary>Applies an install progress report to the card.</summary>
         public void ReportProgress(PackInstallProgress p)
         {
             IsProgressVisible = true;
@@ -272,29 +217,6 @@ namespace CMUmcl
                 {
                     IsIndeterminate = true;
                 }
-            }
-            else
-            {
-                IsIndeterminate = true;
-            }
-        }
-
-        /// <summary>Applies a launch progress report to the card.</summary>
-        public void ReportLaunchProgress(Launch.LaunchProgress p)
-        {
-            IsProgressVisible = true;
-            if (!string.IsNullOrEmpty(p.Message))
-                StatusText = p.Message;
-
-            if (p.TotalTasks > 0)
-            {
-                IsIndeterminate = false;
-                ProgressValue = p.ProgressedTasks * 100.0 / p.TotalTasks;
-            }
-            else if (p.TotalBytes > 0)
-            {
-                IsIndeterminate = false;
-                ProgressValue = p.ProgressedBytes * 100.0 / p.TotalBytes;
             }
             else
             {
