@@ -74,7 +74,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - 已知加载器已全部支持：原版 / Fabric / Forge / NeoForge / Quilt。
 - 设置页、实例迁移、自定义实例创建、启动前自动更新、增量更新已完成，等待用户界面验收；客户端自动更新尚未接入。
 - 增量更新只对带 `files_url` 的新 revision 生效；旧 revision 或 overrides/配置变化时会回退完整包，首次安装也会生成 `.cmumcl-pack-manifest.json` 供后续增量使用。
-- 服务端上传整合包目前不会自动把 `.mrpack` 的依赖写入实例的 `minecraft` 元数据；上传 26.3 包时管理员仍需同步修改实例的 game/loader 字段，否则客户端会按旧元数据启动。
+- 服务端上传/启动时会从 `.mrpack` 的 `modrinth.index.json` 自动同步实例的 `minecraft` 元数据；`test` 已回填为 26.3 / Fabric 0.20.1，旧 1.20.1 / loader 0.15.11 文件已清理。
 - 自定义实例创建时会下载 Minecraft 与加载器文件；成功后写入 `.cmumcl-provisioned.json`，后续启动跳过原版/加载器安装；失败时实例保留，首次启动会自动重试。
 - 已有旧实例首次启动仍会安装一次并生成标记，之后不再重复下载；版本 JSON 缺失或元数据变化会使标记失效。
 - 2026-10-29 已清空全部 6 个测试实例（`test`、`csu-ysu-union`、`forge-test`、`neoforge-test`、`1`、`1 (2)`），仅保留游戏缓存/Java/设置。
