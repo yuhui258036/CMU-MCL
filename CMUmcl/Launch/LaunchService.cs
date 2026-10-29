@@ -11,6 +11,7 @@ using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.Installers;
 using CmlLib.Core.ModLoaders.FabricMC;
+using CmlLib.Core.ModLoaders.QuiltMC;
 using CmlLib.Core.ProcessBuilder;
 
 using CMUmcl.Auth;
@@ -21,12 +22,12 @@ using CMUmcl.Launch.NeoForge;
 namespace CMUmcl.Launch
 {
     /// <summary>
-    /// Installs and launches vanilla, Fabric, Forge or NeoForge server packs.
-    /// Quilt is not supported yet (throws a clear message).
+    /// Installs and launches vanilla, Fabric, Forge, NeoForge or Quilt server packs.
+    /// Unknown loader types throw a clear message.
     /// </summary>
     public sealed class LaunchService : IDisposable
     {
-        private const string UnsupportedLoaderMessage = "当前版本先支持原版/Fabric/Forge/NeoForge，Quilt 下一步接入。";
+        private const string UnsupportedLoaderMessage = "不支持的加载器类型。当前版本支持原版/Fabric/Forge/NeoForge/Quilt。";
         private const string AuthlibInjectorSha256 = "9C7F4343E6C82034958FFB48C14A2CB0C85928BE7283103CE17DA00C6D5A7B10";
 
         private readonly YggdrasilClient _yggdrasil;
@@ -196,7 +197,22 @@ namespace CMUmcl.Launch
                 }
 
                 case "quilt":
-                    throw new LaunchException(UnsupportedLoaderMessage);
+                {
+                    progress?.Report(new LaunchProgress { Stage = "安装 Quilt", Message = "正在安装 Quilt…" });
+                    var quilt = new QuiltInstaller(_http);
+                    if (string.IsNullOrWhiteSpace(loaderVersion))
+                        versionName = await quilt.Install(gameVersion, launcher.MinecraftPath).ConfigureAwait(false);
+                    else
+                        versionName = await quilt.Install(gameVersion, loaderVersion, launcher.MinecraftPath).ConfigureAwait(false);
+
+                    progress?.Report(new LaunchProgress { Stage = "安装 Quilt", Message = $"正在下载 Quilt 依赖（{versionName}）…" });
+                    await launcher.InstallAsync(
+                        versionName,
+                        CreateFileProgress("安装 Quilt", progress),
+                        CreateByteProgress("安装 Quilt", progress),
+                        ct).ConfigureAwait(false);
+                    break;
+                }
 
                 default:
                     throw new LaunchException(UnsupportedLoaderMessage);

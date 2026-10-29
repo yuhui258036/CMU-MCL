@@ -11,11 +11,10 @@
 |--------|------|
 | 原版（`vanilla` / 空） | ✅ 支持 |
 | Fabric | ✅ 支持（使用 CmlLib.Core 内置 `FabricInstaller`） |
-| Forge / NeoForge | ❌ 下一步接入（UI 与启动时均提示） |
-| Quilt | ❌ 下一步接入 |
+| Forge / NeoForge | ✅ 支持（Forge 1.20.1 自研安装器；NeoForge 使用 CmlLib 包） |
+| Quilt | ✅ 支持（CmlLib 内置 `QuiltInstaller`） |
 
-遇到 Forge / NeoForge / Quilt 时，界面与启动流程都会明确提示：
-`当前版本先支持原版/Fabric，Forge/NeoForge 下一步接入。`（不会静默失败）。
+Forge 1.20.1 / NeoForge 1.21.1 / Quilt 1.21.1 已端到端验证；详情见 `README-step4.md` 与 `docs/PROGRESS.md`。
 
 ## 依赖
 
@@ -93,10 +92,10 @@ $env:NUGET_PACKAGES = "D:\新启动器\.nuget\packages"   # 若默认缓存不�
 4. 点击 `启动游戏`：依次安装原版（/ Fabric）、校验登录、注入 authlib-injector、启动进程。
 5. 已安装当前版本时直接 `启动游戏`；启动后状态显示“游戏已启动”。
 
-## 后续工作（Forge / NeoForge）
+## 加载器支持状态
 
-- 下一步接入 Forge / NeoForge 安装与启动（CmlLib 相关 modloader 或自建安装流程）。
-- 可考虑进程退出状态跟踪、崩溃日志展示。
+- Forge 1.20.1、NeoForge 1.21.1、Quilt 1.21.1 已接入并通过端到端验证。
+- 下一步可做设置页、崩溃日志展示、客户端自动更新与发布自动化。
 
 ## 安全说明
 
