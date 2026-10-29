@@ -13,18 +13,24 @@ namespace CMUmcl
         private ResourceManifestClient? _manifestClient;
         private PackInstaller? _installer;
         private InstalledStateStore? _installedState;
+        private SettingsStore? _settingsStore;
         private LaunchService? _launchService;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
+            // Load settings and ensure the on-disk layout exists before any service runs.
+            _settingsStore = new SettingsStore();
+            _settingsStore.Load();
+            LauncherPaths.EnsureDirectories();
+
             _client = new YggdrasilClient();
             _store = new AuthStore();
             _manifestClient = new ResourceManifestClient();
             _installedState = new InstalledStateStore();
             _installer = new PackInstaller(_installedState);
-            _launchService = new LaunchService(_client, _store, _installedState);
+            _launchService = new LaunchService(_client, _store, _installedState, _settingsStore);
 
             AuthSession? session = TryRestoreSession();
             if (session == null)
@@ -116,7 +122,7 @@ namespace CMUmcl
         /// <summary>Shows the main window; on logout, returns to the login gate.</summary>
         private void ShowMainWindow(AuthSession session)
         {
-            var main = new MainWindow(session, _store!, _manifestClient!, _installer!, _installedState!, _launchService!);
+            var main = new MainWindow(session, _store!, _manifestClient!, _installer!, _installedState!, _launchService!, _settingsStore!);
             bool loggingOut = false;
 
             main.LogoutRequested += () => loggingOut = true;

@@ -36,6 +36,38 @@
             <Setter Property="Padding" Value="18,16" />
             <Setter Property="Margin" Value="0,0,0,14" />
         </Style>
+
+        <!-- Settings page styles -->
+        <Style x:Key="SettingsCard" TargetType="Border" BasedOn="{StaticResource PackCard}">
+            <Setter Property="Margin" Value="0,0,0,18" />
+            <Setter Property="Padding" Value="18,16" />
+        </Style>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="34" />
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -61,8 +93,8 @@
 
                 <!-- Nav -->
                 <StackPanel Grid.Row="1" Margin="12,0">
-                    <Button Content="服务器整合包" Style="{StaticResource NavItemActive}" />
-                    <Button Content="设置" Style="{StaticResource NavItemDisabled}" ToolTip="后续版本" />
+                    <Button x:Name="PacksNavButton" Content="服务器整合包" Style="{StaticResource NavItemActive}" Click="PacksNavButton_Click" />
+                    <Button x:Name="SettingsNavButton" Content="设置" Style="{StaticResource NavItem}" Click="SettingsNavButton_Click" />
                 </StackPanel>
 
                 <!-- Account card -->
@@ -97,7 +129,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="服务器整合包" FontSize="20" FontWeight="SemiBold"
+                    <TextBlock x:Name="HeaderTitleText" Grid.Column="0" Text="服务器整合包" FontSize="20" FontWeight="SemiBold"
                                Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" />
                     <TextBlock x:Name="HeaderStatusText" Grid.Column="1" Text=""
                                Foreground="{StaticResource MutedTextBrush}" FontSize="13"
@@ -212,8 +244,107 @@
                             Click="RefreshButton_Click" />
                 </StackPanel>
 
+                <!-- Settings view -->
+                <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                    <StackPanel Margin="24,20" MaxWidth="760">
+                        <!-- Java -->
+                        <TextBlock Text="Java" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <RadioButton x:Name="JavaAutoRadio" Content="自动选择" GroupName="JavaMode" Checked="JavaMode_Checked" />
+                                <RadioButton x:Name="JavaManualRadio" Content="手动指定" GroupName="JavaMode" Checked="JavaMode_Checked" Margin="0,8,0,0" />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="JavaPathTextBox" Grid.Column="0" Margin="0,0,8,0"
+                                             TextChanged="JavaPathTextBox_TextChanged" />
+                                    <Button x:Name="BrowseJavaButton" Grid.Column="1" Content="浏览…" MinWidth="72" Height="34"
+                                            Click="BrowseJavaButton_Click" />
+                                </Grid>
+                                <TextBlock x:Name="JavaDetectedText" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                <TextBlock x:Name="JavaErrorText" FontSize="12" Foreground="{StaticResource ErrorBrush}" Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Memory -->
+                        <TextBlock Text="内存" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="SystemMemoryText" FontSize="12" Foreground="{StaticResource MutedTextBrush}" />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="MemoryTextBox" Grid.Column="0" Width="120" PreviewTextInput="MemoryTextBox_PreviewTextInput" />
+                                    <TextBlock Grid.Column="1" Text="MB" Foreground="{StaticResource MutedTextBrush}" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </Grid>
+                                <TextBlock x:Name="MemoryErrorText" FontSize="12" Foreground="{StaticResource ErrorBrush}" Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Version isolation -->
+                        <TextBlock Text="版本隔离" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <ComboBox x:Name="IsolationComboBox" Width="180" HorizontalAlignment="Left"
+                                          SelectionChanged="IsolationComboBox_SelectionChanged" />
+                                <TextBlock x:Name="IsolationHintText" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="提示：更改版本隔离后，已有世界/配置不会自动迁移；模组实例 = 加载器非空且非原版。" FontSize="12"
+                                           Foreground="{StaticResource AccentBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Directory -->
+                        <TextBlock Text="目录" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="启动器根目录" FontSize="12" Foreground="{StaticResource MutedTextBrush}" />
+                                <TextBlock x:Name="RootPathText" FontSize="13" Foreground="{StaticResource TextBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                <Button x:Name="OpenRootButton" Content="打开根目录" MinWidth="120" Height="34" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                        Click="OpenRootButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Instance storage location -->
+                        <TextBlock Text="实例存放位置" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="实例目录" FontSize="12" Foreground="{StaticResource MutedTextBrush}" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="InstancesDirectoryTextBox" Grid.Column="0" Margin="0,0,8,0"
+                                             TextChanged="InstancesDirectoryTextBox_TextChanged" />
+                                    <Button x:Name="BrowseInstancesButton" Grid.Column="1" Content="浏览…" MinWidth="72" Height="34"
+                                            Click="BrowseInstancesButton_Click" />
+                                </Grid>
+                                <TextBlock x:Name="InstancesDirectoryHintText" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                <TextBlock x:Name="InstancesDirectoryErrorText" FontSize="12" Foreground="{StaticResource ErrorBrush}" Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
+                                <Button x:Name="OpenInstancesButton" Content="打开实例目录" MinWidth="120" Height="34" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                        Click="OpenInstancesButton_Click" />
+                                <TextBlock Text="提示：更改存放位置后，已有实例将被迁移；名称冲突时会自动追加 -2、(2) 等后缀。" FontSize="12"
+                                           Foreground="{StaticResource AccentBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Save -->
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SaveSettingsButton" Content="保存设置" Width="120" Height="36"
+                                    Style="{StaticResource PrimaryButton}" Click="SaveSettingsButton_Click" />
+                            <TextBlock x:Name="SettingsStatusText" Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                       VerticalAlignment="Center" Margin="14,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- No-launch note -->
-                <TextBlock Text="启动功能将在下一步接入" FontSize="12"
+                <TextBlock x:Name="NoLaunchNote" Text="启动功能将在下一步接入" FontSize="12"
                            Foreground="{StaticResource MutedTextBrush}"
                            HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14" />
             </Grid>

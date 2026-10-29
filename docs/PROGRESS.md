@@ -5,7 +5,7 @@
 
 ## 一句话状态
 
-CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选择 Java，并在缺少兼容 Java 时自动下载 Mojang runtime；26.3 已实际启动到主菜单。自包含 win-x64 包已生成并验证独立启动。自动下载已加 3 次重试。Forge、NeoForge、Quilt 均已通过端到端安装并启动到主菜单。下一步做设置页 / 客户端自动更新 / 发布自动化。
+CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选择 Java，并在缺少兼容 Java 时自动下载 Mojang runtime；26.3 已实际启动到主菜单。Forge、NeoForge、Quilt 均已通过端到端安装并启动到主菜单。设置页、Java/内存/版本隔离、实例存放位置迁移已实现，等待用户验收。下一步接启动前自动更新、客户端自动更新和发布自动化。
 
 ## 阶段总览
 
@@ -21,6 +21,9 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
   - [x] **5.2 NeoForge**：1.21.1 + 21.1.265，使用 CmlLib.Core.Installer.NeoForge 4.0.1（MIT）；安装、跳过、Forge 回归和主菜单启动通过；未做 Quilt。
   - [x] **5.3 Quilt**：1.21.1 + 0.20.0-beta.9，使用 CmlLib.Core 内置 QuiltInstaller；安装、依赖下载、主菜单启动通过。
 - [ ] **6. 设置与更新**：Java/内存/目录设置、启动前强制更新、发布自动化
+  - [x] **6.1 设置页**：主窗口内页面；Java 自动/手动、最大内存、版本隔离、根目录打开；待用户验收。
+  - [x] **6.2 实例存放位置**：可配置实例根目录；迁移已有实例；目标冲突自动加 `-2` / ` (2)` 后缀；临时迁移测试 29/29 PASS；待用户验收。
+  - [ ] **6.3 启动前自动更新整合包**：设置已保存，行为尚未接入。
   - [ ] **6.5 客户端自动更新**：检查 GitHub Release/更新清单，下载并替换自包含版本（参考 PCL / YSUMCL 的 updater）
 - [ ] **7. 社区验收**：真实整合包、真实玩家、正式域名/证书
 
@@ -32,7 +35,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
-| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过 |
+| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：29/29 PASS |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
 | 自动 Java | `java-runtime-epsilon` / Java 25.0.1，约 100.2MB，411 files，`.complete` 正常 |
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
@@ -59,12 +62,14 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 
 ## 已知问题 / 风险
 
-- `CMUmcl.exe` 默认构建仍是 framework-dependent；当前自包含包为 Forge + NeoForge 版本，分发用 `CMUmcl-win-x64-neoforge-selfcontained.zip`。
+- `CMUmcl.exe` 默认构建仍是 framework-dependent；当前自包含包为全加载器版本，分发用 `CMUmcl-win-x64-all-loaders-selfcontained.zip`。
 - 发布自动化未配置：GitHub Actions 可自动构建并上传 Release；客户端自动更新尚未实现。
 - Forge 下载已加独立 3 次重试（临时网络/408/429/5xx，间隔 1s/2s）；若网络持续不稳定仍可能失败。
 - Forge 1.20.1 在 JDK 21 上已验证可启动；官方目标仍是 Java 17，后续可评估精确约束。
 - 自动下载已加 3 次重试（仅临时网络 / 408 / 429 / 5xx，间隔 1s/2s）；若代理持续不稳定仍可能失败。
 - 已知加载器已全部支持：原版 / Fabric / Forge / NeoForge / Quilt。
+- 设置页和实例迁移代码已完成，等待用户界面验收；启动前自动更新整合包、启动器自动更新尚未接入。
+- 实例迁移冲突目前自动加后缀，不做逐项手动改名；需要手动改名时再补冲突编辑对话框。
 - `CSUxYSU union server` 的服务器地址目前为空，需要后台补上。
 - 服务端 manifest 私钥仍在服务器上；后续可评估离线签名。
 - Git push 走 HTTPS + 本机代理；直连 GitHub 可能卡住。

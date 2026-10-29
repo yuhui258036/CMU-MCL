@@ -9,11 +9,11 @@ namespace CMUmcl
     {
         private readonly ManifestInstance _instance;
 
-        public PackCardViewModel(ManifestInstance instance, int? installedRevision)
+        public PackCardViewModel(ManifestInstance instance, int? installedRevision, string? displayName = null)
         {
             _instance = instance;
 
-            Name = instance.Name;
+            Name = string.IsNullOrWhiteSpace(displayName) ? instance.Name : displayName!;
             Description = string.IsNullOrWhiteSpace(instance.Description)
                 ? "（无描述）"
                 : instance.Description!;
@@ -35,7 +35,12 @@ namespace CMUmcl
         public ManifestInstance Instance => _instance;
         public string InstanceId => _instance.Id;
 
-        public string Name { get; }
+        private string _name = string.Empty;
+        public string Name
+        {
+            get => _name;
+            private set { _name = value; OnPropertyChanged(); }
+        }
         public string Description { get; }
         public string RevisionText { get; }
         public string GameText { get; }
@@ -89,6 +94,10 @@ namespace CMUmcl
             get => _progressValue;
             private set { _progressValue = value; OnPropertyChanged(); }
         }
+
+        /// <summary>Updates the displayed name from the installed-state record (falls back to the manifest name).</summary>
+        public void SetDisplayName(string? displayName)
+            => Name = string.IsNullOrWhiteSpace(displayName) ? _instance.Name : displayName!;
 
         /// <summary>Sets the card into an idle state reflecting the installed revision.</summary>
         public void UpdateButtonState(int? installedRevision)

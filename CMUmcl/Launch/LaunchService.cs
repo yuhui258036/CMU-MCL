@@ -33,13 +33,19 @@ namespace CMUmcl.Launch
         private readonly YggdrasilClient _yggdrasil;
         private readonly AuthStore _authStore;
         private readonly InstalledStateStore _installedState;
+        private readonly SettingsStore _settingsStore;
         private readonly HttpClient _http;
 
-        public LaunchService(YggdrasilClient yggdrasil, AuthStore authStore, InstalledStateStore installedState)
+        public LaunchService(
+            YggdrasilClient yggdrasil,
+            AuthStore authStore,
+            InstalledStateStore installedState,
+            SettingsStore settingsStore)
         {
             _yggdrasil = yggdrasil;
             _authStore = authStore;
             _installedState = installedState;
+            _settingsStore = settingsStore;
             _http = new HttpClient();
         }
 
@@ -57,8 +63,9 @@ namespace CMUmcl.Launch
             if (installedRevision == null || installedRevision.Value < instance.Revision)
                 throw new LaunchException("请先安装 / 更新该整合包再启动。");
 
-            // 2. Read instance.json.
-            string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, instance.Id);
+            // 2. Read instance.json from the recorded install path (fallback to the id).
+            string installPath = _installedState.GetInstallPath(instance.Id);
+            string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, installPath);
             string instanceJsonPath = Path.Combine(instanceDir, "instance.json");
             if (!File.Exists(instanceJsonPath))
                 throw new LaunchException("找不到实例信息，请重新安装该整合包。");
@@ -82,6 +89,9 @@ namespace CMUmcl.Launch
             if (string.IsNullOrWhiteSpace(gameVersion))
                 throw new LaunchException("实例缺少 Minecraft 版本信息。");
 
+            // 2.5 Load the current user settings (Java path, memory, version isolation).
+            AppSettings settings = _settingsStore.Load();
+
             // 3. Validate/refresh the session before launching.
             session = await EnsureValidSessionAsync(session, progress, ct).ConfigureAwait(false);
 
@@ -102,27 +112,42 @@ namespace CMUmcl.Launch
                 ct).ConfigureAwait(false);
 
             // 7.5 Select a compatible Java runtime (before loader resolution so Forge
-            // processors can run). Same logic as before; only the timing changes.
+            // processors can run). Manual path is validated first; otherwise auto-select
+            // or auto-download.
             JavaRequirement requirement = JavaVersionResolver.ResolveRequirement(gameVersion, LauncherPaths.MinecraftDirectory);
 
-            IReadOnlyList<JavaInfo> javaCandidates = JavaLocator.Scan();
-            JavaInfo? java = JavaLocator.Select(requirement.Major, javaCandidates);
-
-            if (java == null && requirement.Component != null)
+            JavaInfo? java;
+            if (!string.IsNullOrWhiteSpace(settings.JavaPath))
             {
-                progress?.Report(new LaunchProgress { Stage = "下载 Java", Message = "未找到兼容的本地 Java，正在自动下载 Java 运行时…" });
-                using var installer = new MojangRuntimeInstaller();
-                java = await installer.EnsureRuntimeAsync(requirement.Component, requirement.Major, progress, ct).ConfigureAwait(false);
+                java = JavaLocator.DetectExecutable(settings.JavaPath);
+                if (java == null || java.Major <= 0)
+                    throw new LaunchException("手动指定的 Java 路径无效或无法读取其版本信息。请在设置中检查 Java 路径。");
+
+                if (java.Major < requirement.Major)
+                    throw new LaunchException(
+                        $"手动指定的 Java 版本为 {java.Major}，但 Minecraft {gameVersion} 需要 Java {requirement.Major} 或更高版本。请在设置中更换 Java 版本。");
             }
-
-            if (java == null)
+            else
             {
-                if (javaCandidates.Count == 0)
-                    throw new LaunchException($"未找到 Java 运行环境。请安装 Java {requirement.Major} 并重试。");
+                IReadOnlyList<JavaInfo> javaCandidates = JavaLocator.Scan();
+                java = JavaLocator.Select(requirement.Major, javaCandidates);
 
-                string detected = string.Join(", ", javaCandidates.Select(c => c.Major).Distinct().OrderBy(m => m));
-                throw new LaunchException(
-                    $"未找到满足 Minecraft {gameVersion} 的 Java（需要 Java {requirement.Major}）。已检测到的 Java 主版本：{detected}。请手动安装 Java {requirement.Major} 后重试。");
+                if (java == null && requirement.Component != null)
+                {
+                    progress?.Report(new LaunchProgress { Stage = "下载 Java", Message = "未找到兼容的本地 Java，正在自动下载 Java 运行时…" });
+                    using var installer = new MojangRuntimeInstaller();
+                    java = await installer.EnsureRuntimeAsync(requirement.Component, requirement.Major, progress, ct).ConfigureAwait(false);
+                }
+
+                if (java == null)
+                {
+                    if (javaCandidates.Count == 0)
+                        throw new LaunchException($"未找到 Java 运行环境。请安装 Java {requirement.Major} 并重试。");
+
+                    string detected = string.Join(", ", javaCandidates.Select(c => c.Major).Distinct().OrderBy(m => m));
+                    throw new LaunchException(
+                        $"未找到满足 Minecraft {gameVersion} 的 Java（需要 Java {requirement.Major}）。已检测到的 Java 主版本：{detected}。请手动安装 Java {requirement.Major} 后重试。");
+                }
             }
 
             progress?.Report(new LaunchProgress
@@ -222,18 +247,21 @@ namespace CMUmcl.Launch
             var mSession = new MSession(session.SelectedProfileName, session.AccessToken, session.SelectedProfileId);
 
             // 10. Build MLaunchOption.
+            string gameDir = ResolveGameDirectory(settings, instanceDir, loader);
+            Directory.CreateDirectory(gameDir);
+
             var option = new MLaunchOption
             {
                 Session = mSession,
                 Path = launcher.MinecraftPath,
                 JavaPath = java.JavaPath,
-                MaximumRamMb = 4096,
+                MaximumRamMb = Math.Max(512, settings.MaxMemoryMb),
                 MinimumRamMb = 512,
                 GameLauncherName = "CMUmcl",
                 GameLauncherVersion = "0.1.0",
                 ArgumentDictionary = new Dictionary<string, string>
                 {
-                    ["game_directory"] = instanceDir,
+                    ["game_directory"] = gameDir,
                 },
             };
 
@@ -264,6 +292,32 @@ namespace CMUmcl.Launch
                 Session = session,
                 VersionName = versionName,
             };
+        }
+
+        /// <summary>
+        /// Determines the game directory for an instance according to the version-isolation
+        /// setting. "Modded" means the loader is neither empty nor vanilla.
+        /// </summary>
+        private static string ResolveGameDirectory(AppSettings settings, string instanceDir, string loader)
+        {
+            switch (settings.VersionIsolation)
+            {
+                case VersionIsolation.All:
+                    return instanceDir;
+
+                case VersionIsolation.ModdedOnly:
+                    return IsModdedLoader(loader) ? instanceDir : LauncherPaths.GameDirectory;
+
+                case VersionIsolation.Off:
+                default:
+                    return LauncherPaths.GameDirectory;
+            }
+        }
+
+        private static bool IsModdedLoader(string? loader)
+        {
+            string normalized = (loader ?? string.Empty).Trim().ToLowerInvariant();
+            return normalized is not ("" or "vanilla");
         }
 
         private async Task<AuthSession> EnsureValidSessionAsync(

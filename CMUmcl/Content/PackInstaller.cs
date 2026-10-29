@@ -65,8 +65,15 @@ namespace CMUmcl.Content
             // 2. Read modrinth.index.json from the archive.
             ModrinthIndex index = ReadIndex(packPath);
 
-            // 3. Create the instance directory.
-            string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, instance.Id);
+            // 3. Resolve (and create) the instance directory under the configured instances root.
+            //    Reuse the recorded install path when it is ours; otherwise pick a collision-free name.
+            string instancesRoot = LauncherPaths.InstancesDirectory;
+            Directory.CreateDirectory(instancesRoot);
+
+            string recordedPath = _installedState.GetInstallPath(instance.Id);
+            string? existingDisplayName = _installedState.GetDisplayName(instance.Id);
+            (string installPath, int suffix) = PickInstallPath(instancesRoot, instance.Id, recordedPath);
+            string instanceDir = Path.Combine(instancesRoot, installPath);
             Directory.CreateDirectory(instanceDir);
 
             // 4. Download the listed files.
@@ -110,8 +117,11 @@ namespace CMUmcl.Content
                 JsonSerializer.Serialize(metadata, JsonOptions),
                 ct).ConfigureAwait(false);
 
-            // 7. Record the installed revision.
-            _installedState.SetInstalledRevision(instance.Id, instance.Revision);
+            // 7. Record the installed revision, install path and display name. A path collision
+            //    (suffix > 0) yields a disambiguated display name; otherwise the existing display
+            //    name (if any) is preserved and null falls back to the manifest name in the UI.
+            string? displayName = suffix > 0 ? $"{instance.Name} ({suffix})" : existingDisplayName;
+            _installedState.RecordInstall(instance.Id, instance.Revision, installPath, displayName);
 
             progress?.Report(new PackInstallProgress
             {
@@ -413,6 +423,68 @@ namespace CMUmcl.Content
         // ------------------------------------------------------------------
         // Path safety
         // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Picks a collision-free install directory name under <paramref name="root"/>. Reuses the
+        /// recorded path (or the id) when it is free or already belongs to this instance; otherwise
+        /// appends <c>-2</c>, <c>-3</c>, … The returned suffix is 0 when no renaming was needed.
+        /// </summary>
+        private static (string Path, int Suffix) PickInstallPath(string root, string id, string recordedPath)
+        {
+            string candidate = SafeInstanceName(recordedPath) ?? id;
+
+            if (!Directory.Exists(Path.Combine(root, candidate)) || IsOurInstance(Path.Combine(root, candidate), id))
+                return (candidate, 0);
+
+            string baseName = candidate;
+            int n = 2;
+            while (true)
+            {
+                string alt = baseName + "-" + n;
+                string altDir = Path.Combine(root, alt);
+                if (!Directory.Exists(altDir) || IsOurInstance(altDir, id))
+                    return (alt, n);
+                n++;
+            }
+        }
+
+        /// <summary>True when <paramref name="dir"/> contains an instance.json whose id matches <paramref name="id"/>.</summary>
+        private static bool IsOurInstance(string dir, string id)
+        {
+            try
+            {
+                string metaPath = Path.Combine(dir, "instance.json");
+                if (!File.Exists(metaPath))
+                    return false;
+
+                var meta = JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaPath), JsonOptions);
+                return string.Equals(meta?.Id, id, StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Reduces a recorded install path to a safe single folder name, or null if unusable.</summary>
+        private static string? SafeInstanceName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+
+            string n = name.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+
+            if (Path.IsPathRooted(n)
+                || n.IndexOf(Path.DirectorySeparatorChar) >= 0
+                || n.IndexOf(Path.AltDirectorySeparatorChar) >= 0
+                || n.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                || n is "." or "..")
+            {
+                return null;
+            }
+
+            return n;
+        }
 
         private static string SanitizeRelativePath(string path)
         {

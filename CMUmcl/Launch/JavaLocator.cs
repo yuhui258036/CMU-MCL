@@ -191,6 +191,41 @@ namespace CMUmcl.Launch
             return new JavaInfo { JavaPath = javaPath, Version = version, Major = major };
         }
 
+        /// <summary>
+        /// Detects a JDK from a user-supplied path, which may be a direct java.exe/javaw.exe
+        /// path, a JDK root directory, or its bin directory. Returns null when the path does
+        /// not point to a detectable runtime.
+        /// </summary>
+        public static JavaInfo? DetectExecutable(string? javaPath)
+        {
+            if (string.IsNullOrWhiteSpace(javaPath))
+                return null;
+
+            string full;
+            try
+            {
+                full = Path.GetFullPath(javaPath.Trim());
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (File.Exists(full))
+            {
+                string? binDir = Path.GetDirectoryName(full);
+                if (binDir != null && Path.GetFileName(binDir).Equals("bin", StringComparison.OrdinalIgnoreCase))
+                    return Detect(Path.GetDirectoryName(binDir)!);
+
+                return Detect(binDir ?? full);
+            }
+
+            if (Directory.Exists(full))
+                return Detect(full);
+
+            return null;
+        }
+
         /// <summary>Normalizes a raw version string to its major version: 1.8.x → 8, 21.0.8 → 21.</summary>
         public static int ParseJavaMajor(string? version)
         {
