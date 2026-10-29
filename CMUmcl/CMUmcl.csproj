@@ -24,4 +24,9 @@
     <None Include="Assets\authlib-injector.jar" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\InstanceIcons\*.png" />
+    <Resource Include="Assets\InstanceIcons\*.jpg" />
+  </ItemGroup>
+
 </Project>

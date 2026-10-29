@@ -9,9 +9,88 @@ using System.Xml.Linq;
 using CmlLib.Core;
 using CmlLib.Core.ModLoaders.FabricMC;
 using CmlLib.Core.ModLoaders.QuiltMC;
+using CmlLib.Core.VersionMetadata;
 
 namespace CMUmcl.Content
 {
+    /// <summary>
+    /// PCL-like grouping used by the in-main create-instance flow (全部 / 正式版 / 快照 /
+    /// 愚人节 / 远古版本 / 其他).
+    /// </summary>
+    public enum MinecraftVersionCategory
+    {
+        Release,
+        Snapshot,
+        AprilFools,
+        Old,
+        Other,
+    }
+
+    /// <summary>
+    /// A Minecraft version with its raw Mojang metadata plus a UI-facing category. Release
+    /// time is kept as a <see cref="DateTimeOffset"/> so the UI can format it (locally or
+    /// otherwise) as it sees fit.
+    /// </summary>
+    public sealed class MinecraftVersionInfo
+    {
+        public MinecraftVersionInfo(string name, string type, DateTimeOffset releaseTime, MinecraftVersionCategory category)
+        {
+            Name = name;
+            Type = type;
+            ReleaseTime = releaseTime;
+            Category = category;
+        }
+
+        public string Name { get; }
+
+        /// <summary>Raw Mojang version type (e.g. <c>release</c>/<c>snapshot</c>/<c>old_alpha</c>).</summary>
+        public string Type { get; }
+
+        public DateTimeOffset ReleaseTime { get; }
+
+        public MinecraftVersionCategory Category { get; }
+
+        public string CategoryLabel => Category switch
+        {
+            MinecraftVersionCategory.Release => "正式版",
+            MinecraftVersionCategory.Snapshot => "快照",
+            MinecraftVersionCategory.AprilFools => "愚人节",
+            MinecraftVersionCategory.Old => "远古版本",
+            _ => "其他",
+        };
+
+        public bool IsRelease => Category == MinecraftVersionCategory.Release;
+        public bool IsSnapshot => Category == MinecraftVersionCategory.Snapshot;
+        public bool IsAprilFools => Category == MinecraftVersionCategory.AprilFools;
+        public bool IsOld => Category == MinecraftVersionCategory.Old;
+    }
+
+    /// <summary>
+    /// One loader (Fabric/Quilt/Forge/NeoForge) version with its Minecraft compatibility and
+    /// a ready-to-show detail line ("稳定版", "构建 123" or "Minecraft 1.21.1").
+    /// </summary>
+    public sealed class LoaderVersionInfo
+    {
+        public LoaderVersionInfo(string version, string gameVersion, bool isStable, string detail)
+        {
+            Version = version;
+            GameVersion = gameVersion;
+            IsStable = isStable;
+            Detail = detail;
+        }
+
+        /// <summary>Loader version string (Fabric/Quilt/NeoForge full version, Forge suffix).</summary>
+        public string Version { get; }
+
+        /// <summary>The Minecraft version this loader build targets.</summary>
+        public string GameVersion { get; }
+
+        /// <summary>True for stable loader builds (Fabric/Quilt); Forge/NeoForge entries are always stable.</summary>
+        public bool IsStable { get; }
+
+        public string Detail { get; }
+    }
+
     /// <summary>
     /// Loads Minecraft / Fabric / Forge / NeoForge / Quilt version lists for the
     /// create-instance dialog. Every public method is defensive: network failures,
@@ -64,22 +143,22 @@ namespace CMUmcl.Content
         }
 
         /// <summary>
-        /// Minecraft release version names, newest first. Returns an empty list on any
-        /// network/timeout/parse failure (the dialog then relies on manual input).
+        /// Every Minecraft version (release, snapshot, April Fools and ancient builds) mapped to
+        /// a <see cref="MinecraftVersionInfo"/>, newest release time first. Empty on any
+        /// network/timeout/parse failure; cancellation is propagated.
         /// </summary>
-        public async Task<IReadOnlyList<string>> GetMinecraftReleaseVersionsAsync(CancellationToken ct = default)
+        public async Task<IReadOnlyList<MinecraftVersionInfo>> GetMinecraftVersionsAsync(CancellationToken ct = default)
         {
             try
             {
                 var versions = await WithTimeoutAsync(
                     () => _launcher.GetAllVersionsAsync(ct).AsTask(), ct).ConfigureAwait(false);
                 if (versions == null)
-                    return Array.Empty<string>();
+                    return Array.Empty<MinecraftVersionInfo>();
 
                 return versions
-                    .Where(v => string.Equals(v.Type, "release", StringComparison.OrdinalIgnoreCase))
+                    .Select(ToMinecraftVersionInfo)
                     .OrderByDescending(v => v.ReleaseTime)
-                    .Select(v => v.Name!)
                     .ToList();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -88,8 +167,44 @@ namespace CMUmcl.Content
             }
             catch
             {
-                return Array.Empty<string>();
+                return Array.Empty<MinecraftVersionInfo>();
             }
+        }
+
+        /// <summary>
+        /// Minecraft release version names, newest first. Returns an empty list on any
+        /// network/timeout/parse failure (the dialog then relies on manual input).
+        /// </summary>
+        public async Task<IReadOnlyList<string>> GetMinecraftReleaseVersionsAsync(CancellationToken ct = default)
+        {
+            IReadOnlyList<MinecraftVersionInfo> all = await GetMinecraftVersionsAsync(ct).ConfigureAwait(false);
+            return all
+                .Where(v => v.IsRelease)
+                .Select(v => v.Name)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Detailed loader versions for a loader (<c>fabric</c>/<c>quilt</c>/<c>forge</c>/
+        /// <c>neoforge</c>) and a game version. Returns an empty list for vanilla/unknown
+        /// loaders or on any failure; cancellation is propagated.
+        /// </summary>
+        public Task<IReadOnlyList<LoaderVersionInfo>> GetLoaderVersionsAsync(string loader, string gameVersion, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(loader) || string.IsNullOrWhiteSpace(gameVersion))
+                return Task.FromResult<IReadOnlyList<LoaderVersionInfo>>(Array.Empty<LoaderVersionInfo>());
+
+            string loaderKey = loader.Trim().ToLowerInvariant();
+            string mc = gameVersion.Trim();
+
+            return loaderKey switch
+            {
+                "fabric" => GetFabricLoaderVersionsDetailedAsync(mc, ct),
+                "quilt" => GetQuiltLoaderVersionsDetailedAsync(mc, ct),
+                "forge" => GetForgeLoaderVersionsDetailedAsync(mc, ct),
+                "neoforge" => GetNeoForgeLoaderVersionsDetailedAsync(mc, ct),
+                _ => Task.FromResult<IReadOnlyList<LoaderVersionInfo>>(Array.Empty<LoaderVersionInfo>()),
+            };
         }
 
         /// <summary>Fabric loader versions for a game version, stable-first. Empty on any failure.</summary>
@@ -100,18 +215,8 @@ namespace CMUmcl.Content
 
             try
             {
-                var loaders = await WithTimeoutAsync(
-                    () => _fabric.GetLoaders(gameVersion.Trim()), ct).ConfigureAwait(false);
-                if (loaders == null)
-                    return Array.Empty<string>();
-
-                return loaders
-                    .Where(l => !string.IsNullOrWhiteSpace(l.Version))
-                    .OrderByDescending(l => l.Stable)
-                    .ThenByDescending(l => l.Build)
-                    .ThenByDescending(l => l.Version, StringComparer.OrdinalIgnoreCase)
-                    .Select(l => l.Version!)
-                    .ToList();
+                IReadOnlyList<LoaderVersionInfo> detailed = await GetLoaderVersionsAsync("fabric", gameVersion, ct).ConfigureAwait(false);
+                return detailed.Select(l => l.Version).ToList();
             }
             catch
             {
@@ -127,18 +232,8 @@ namespace CMUmcl.Content
 
             try
             {
-                var loaders = await WithTimeoutAsync(
-                    () => _quilt.GetLoaders(gameVersion.Trim()), ct).ConfigureAwait(false);
-                if (loaders == null)
-                    return Array.Empty<string>();
-
-                return loaders
-                    .Where(l => !string.IsNullOrWhiteSpace(l.Version))
-                    .OrderByDescending(l => l.Stable)
-                    .ThenByDescending(l => l.Build ?? 0)
-                    .ThenByDescending(l => l.Version, StringComparer.OrdinalIgnoreCase)
-                    .Select(l => l.Version!)
-                    .ToList();
+                IReadOnlyList<LoaderVersionInfo> detailed = await GetLoaderVersionsAsync("quilt", gameVersion, ct).ConfigureAwait(false);
+                return detailed.Select(l => l.Version).ToList();
             }
             catch
             {
@@ -158,24 +253,8 @@ namespace CMUmcl.Content
 
             try
             {
-                IReadOnlyList<string> all = await GetOrFetchForgeVersionsAsync(ct).ConfigureAwait(false);
-                string mc = gameVersion.Trim();
-
-                var result = new List<string>();
-                foreach (string version in all)
-                {
-                    int dash = version.IndexOf('-');
-                    if (dash <= 0)
-                        continue;
-
-                    if (!string.Equals(version.Substring(0, dash), mc, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    result.Add(version.Substring(dash + 1));
-                }
-
-                result.Sort(CompareVersionStringsDescending);
-                return result;
+                IReadOnlyList<LoaderVersionInfo> detailed = await GetLoaderVersionsAsync("forge", gameVersion, ct).ConfigureAwait(false);
+                return detailed.Select(l => l.Version).ToList();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -200,23 +279,8 @@ namespace CMUmcl.Content
 
             try
             {
-                IReadOnlyList<string> all = await GetOrFetchNeoForgeVersionsAsync(ct).ConfigureAwait(false);
-                string mc = gameVersion.Trim();
-
-                var result = new List<string>();
-                foreach (string version in all)
-                {
-                    if (!TryMapNeoForgeMcVersion(version, out string? mapped))
-                        continue;
-
-                    if (!string.Equals(mapped, mc, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    result.Add(version);
-                }
-
-                result.Sort(CompareVersionStringsDescending);
-                return result;
+                IReadOnlyList<LoaderVersionInfo> detailed = await GetLoaderVersionsAsync("neoforge", gameVersion, ct).ConfigureAwait(false);
+                return detailed.Select(l => l.Version).ToList();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -256,6 +320,215 @@ namespace CMUmcl.Content
             }
 
             return await task.ConfigureAwait(false);
+        }
+
+        // ------------------------------------------------------------------
+        // Detailed loader version lists
+        // ------------------------------------------------------------------
+
+        private async Task<IReadOnlyList<LoaderVersionInfo>> GetFabricLoaderVersionsDetailedAsync(string gameVersion, CancellationToken ct)
+        {
+            try
+            {
+                var loaders = await WithTimeoutAsync(
+                    () => _fabric.GetLoaders(gameVersion), ct).ConfigureAwait(false);
+                if (loaders == null)
+                    return Array.Empty<LoaderVersionInfo>();
+
+                return loaders
+                    .Where(l => !string.IsNullOrWhiteSpace(l.Version))
+                    .OrderByDescending(l => l.Stable)
+                    .ThenByDescending(l => l.Build)
+                    .ThenByDescending(l => l.Version, StringComparer.OrdinalIgnoreCase)
+                    .Select(l => new LoaderVersionInfo(l.Version!, gameVersion, l.Stable, FabricLikeDetail(l.Stable, l.Build)))
+                    .ToList();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return Array.Empty<LoaderVersionInfo>();
+            }
+        }
+
+        private async Task<IReadOnlyList<LoaderVersionInfo>> GetQuiltLoaderVersionsDetailedAsync(string gameVersion, CancellationToken ct)
+        {
+            try
+            {
+                var loaders = await WithTimeoutAsync(
+                    () => _quilt.GetLoaders(gameVersion), ct).ConfigureAwait(false);
+                if (loaders == null)
+                    return Array.Empty<LoaderVersionInfo>();
+
+                return loaders
+                    .Where(l => !string.IsNullOrWhiteSpace(l.Version))
+                    .OrderByDescending(l => l.Stable)
+                    .ThenByDescending(l => l.Build ?? 0)
+                    .ThenByDescending(l => l.Version, StringComparer.OrdinalIgnoreCase)
+                    .Select(l => new LoaderVersionInfo(l.Version!, gameVersion, l.Stable, FabricLikeDetail(l.Stable, l.Build)))
+                    .ToList();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return Array.Empty<LoaderVersionInfo>();
+            }
+        }
+
+        private async Task<IReadOnlyList<LoaderVersionInfo>> GetForgeLoaderVersionsDetailedAsync(string gameVersion, CancellationToken ct)
+        {
+            try
+            {
+                IReadOnlyList<string> all = await GetOrFetchForgeVersionsAsync(ct).ConfigureAwait(false);
+
+                var result = new List<LoaderVersionInfo>();
+                foreach (string version in all)
+                {
+                    int dash = version.IndexOf('-');
+                    if (dash <= 0)
+                        continue;
+
+                    if (!string.Equals(version.Substring(0, dash), gameVersion, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    result.Add(new LoaderVersionInfo(version.Substring(dash + 1), gameVersion, true, $"Minecraft {gameVersion}"));
+                }
+
+                result.Sort((l, r) => CompareVersionStringsDescending(l.Version, r.Version));
+                return result;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return Array.Empty<LoaderVersionInfo>();
+            }
+        }
+
+        private async Task<IReadOnlyList<LoaderVersionInfo>> GetNeoForgeLoaderVersionsDetailedAsync(string gameVersion, CancellationToken ct)
+        {
+            try
+            {
+                IReadOnlyList<string> all = await GetOrFetchNeoForgeVersionsAsync(ct).ConfigureAwait(false);
+
+                var result = new List<LoaderVersionInfo>();
+                foreach (string version in all)
+                {
+                    if (!TryMapNeoForgeMcVersion(version, out string? mapped))
+                        continue;
+
+                    if (!string.Equals(mapped, gameVersion, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    result.Add(new LoaderVersionInfo(version, gameVersion, true, $"Minecraft {gameVersion}"));
+                }
+
+                result.Sort((l, r) => CompareVersionStringsDescending(l.Version, r.Version));
+                return result;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return Array.Empty<LoaderVersionInfo>();
+            }
+        }
+
+        /// <summary>Detail line for Fabric/Quilt: stable build vs "构建 {n}"/"开发版".</summary>
+        private static string FabricLikeDetail(bool stable, int? build)
+            => stable ? "稳定版" : (build is int b ? $"构建 {b}" : "开发版");
+
+        // ------------------------------------------------------------------
+        // Minecraft version classification
+        // ------------------------------------------------------------------
+
+        private static MinecraftVersionInfo ToMinecraftVersionInfo(IVersionMetadata v)
+        {
+            string name = v.Name ?? string.Empty;
+            string type = v.Type ?? string.Empty;
+            return new MinecraftVersionInfo(name, type, v.ReleaseTime, ClassifyMinecraftVersion(type, name, v.ReleaseTime));
+        }
+
+        /// <summary>
+        /// Maps a Mojang version (raw type + id + release time) to a PCL-like category. The
+        /// order matters: <c>release</c> wins over everything (so a real release shipped on
+        /// April 1st stays a release), then ancient builds, then April Fools (known ids or an
+        /// April-1st release time in a UTC+2 window), then snapshots.
+        /// </summary>
+        private static MinecraftVersionCategory ClassifyMinecraftVersion(string type, string name, DateTimeOffset releaseTime)
+        {
+            if (string.Equals(type, "release", StringComparison.OrdinalIgnoreCase))
+                return MinecraftVersionCategory.Release;
+
+            if (string.Equals(type, "old_alpha", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "old_beta", StringComparison.OrdinalIgnoreCase))
+                return MinecraftVersionCategory.Old;
+
+            if (string.IsNullOrWhiteSpace(type) && IsOldVersionId(name))
+                return MinecraftVersionCategory.Old;
+
+            if (IsAprilFoolsVersion(name, releaseTime))
+                return MinecraftVersionCategory.AprilFools;
+
+            if (string.Equals(type, "special", StringComparison.OrdinalIgnoreCase))
+                return MinecraftVersionCategory.AprilFools;
+
+            if (string.Equals(type, "snapshot", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "pending", StringComparison.OrdinalIgnoreCase))
+                return MinecraftVersionCategory.Snapshot;
+
+            return MinecraftVersionCategory.Other;
+        }
+
+        /// <summary>Known April Fools ids, plus the April-1st release-time fallback (UTC+2 window).</summary>
+        private static bool IsAprilFoolsVersion(string name, DateTimeOffset releaseTime)
+        {
+            string id = name.ToLowerInvariant();
+
+            if (id.StartsWith("2.0", StringComparison.Ordinal) ||
+                id.StartsWith("2point0", StringComparison.Ordinal) ||
+                id.StartsWith("20w14inf", StringComparison.Ordinal) ||
+                id == "20w14∞")
+            {
+                return true;
+            }
+
+            switch (id)
+            {
+                case "15w14a":
+                case "1.rv-pre1":
+                case "3d shareware v1.34":
+                case "22w13oneblockatatime":
+                case "23w13a_or_b":
+                case "24w14potato":
+                case "25w14craftmine":
+                case "26w14a":
+                    return true;
+            }
+
+            // Release time on April 1st, considering a UTC+2 local window (mirrors PCL).
+            DateTimeOffset d = releaseTime.ToUniversalTime().AddHours(2);
+            return d.Month == 4 && d.Day == 1;
+        }
+
+        /// <summary>Defensive check for ancient ids when Mojang omits the type (should not happen today).</summary>
+        private static bool IsOldVersionId(string name)
+        {
+            string id = name.ToLowerInvariant();
+            return id.StartsWith("c0.", StringComparison.Ordinal)
+                || id.StartsWith("a1.", StringComparison.Ordinal)
+                || id.StartsWith("b1.", StringComparison.Ordinal)
+                || id.StartsWith("rd-", StringComparison.Ordinal)
+                || id.StartsWith("inf-", StringComparison.Ordinal);
         }
 
         // ------------------------------------------------------------------

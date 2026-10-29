@@ -20,6 +20,12 @@ ForgeInstallerParser.cs、ForgeProcessorRunner.cs、ForgeLoaderInstaller.cs）�
 未复制任何 Plain Craft Launcher（PCL）代码、字符串或品牌；PCL-CE 核心采用
 PCL Limited Distribution License，禁止纳入本项目。
 
+## 实例图标素材
+
+创建实例界面使用的实例图标（grass-block.png、Fabric.png、Forge.jpg、NeoForge.png、Quilt.png、OptiFine.png）
+来自 Axolotl Launcher（YSUMCL fork）的 `apps/app-frontend/src/assets/instance-icons/`。
+该项目采用 GPL-3.0-only 许可，素材随本项目整体以 GPL-3.0-only 分发，版权归其上游作者所有。
+
 ## 第三方依赖许可
 
 以下第三方组件保留各自上游许可，不受本项目整体 GPL-3.0-only 许可影响，仅在其自身许可下随包分发：
