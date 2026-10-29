@@ -285,18 +285,18 @@ journalctl -u pcl-cmu -n 50 --no-pager
 客户端下载并验证：
 
 ```powershell
+$checkDir = Join-Path $env:TEMP "cmumcl-key-check"
+New-Item -ItemType Directory -Path $checkDir -Force | Out-Null
+Set-Location $checkDir
+
 curl.exe -fsS https://103.24.216.15/manifest.json -o manifest.json
 curl.exe -fsS https://103.24.216.15/manifest.json.sig -o manifest.json.sig
 
-$sig = (Get-Content .\manifest.json.sig -Raw | ConvertFrom-Json).signature
-[IO.File]::WriteAllBytes(
-  (Join-Path $PWD 'manifest.sig.bin'),
-  [Convert]::FromBase64String($sig)
-)
-
-& "C:\Program Files\Git\usr\bin\openssl.exe" dgst -sha256 -verify `
-  "D:\secure\cmumcl-keys-2026-11\manifest-signing-public-2026-11.pem" `
-  -signature .\manifest.sig.bin .\manifest.json
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File "D:\新启动器\scripts\verify-manifest-signature.ps1" `
+  -PublicKey "D:\secure\cmumcl-keys-2026-11\manifest-signing-public-2026-11.pem" `
+  -Manifest "$checkDir\manifest.json" `
+  -Signature "$checkDir\manifest.json.sig"
 ```
 
 应输出：
@@ -304,6 +304,8 @@ $sig = (Get-Content .\manifest.json.sig -Raw | ConvertFrom-Json).signature
 ```text
 Verified OK
 ```
+
+注意：manifest 签名使用 IEEE P1363（`r||s`）格式，不能用 `openssl dgst` 直接验证原始签名；上面的脚本会先转换成 DER，再调用 OpenSSL。
 
 然后用新客户端实际拉取一次资源清单，确认不再报“清单签名验证失败”。
 
