@@ -366,6 +366,11 @@ namespace CMUmcl
 
         private async Task LaunchInstanceAsync(InstanceCardViewModel vm)
         {
+            // Auto-update check for managed server packs (local instances and disabled
+            // auto-update launch the installed revision directly).
+            if (!await TryAutoUpdateBeforeLaunchAsync(vm))
+                return;
+
             vm.BeginLaunch();
 
             var progress = new Progress<LaunchProgress>(vm.ReportLaunchProgress);
@@ -400,6 +405,125 @@ namespace CMUmcl
                 vm.LaunchFail("启动失败，发生了未知错误。");
                 MessageBox.Show(this, "启动失败，发生了未知错误。\n" + ex.Message, "启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        // ------------------------------------------------------------------
+        // Pre-launch auto-update (managed server packs only)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Performs the launch-time auto-update check. Returns false when the launch must not
+        /// proceed (check/update failed). Local instances and disabled auto-update return true
+        /// immediately so the installed revision is launched directly.
+        /// </summary>
+        private async Task<bool> TryAutoUpdateBeforeLaunchAsync(InstanceCardViewModel vm)
+        {
+            string id = vm.InstanceId;
+
+            // Local custom instances are never auto-updated.
+            if (id.StartsWith(PackAutoUpdate.LocalIdPrefix, StringComparison.Ordinal))
+                return true;
+
+            // Auto-update disabled: launch the installed revision directly.
+            if (!_settings.AutoUpdatePacks)
+                return true;
+
+            int? installedRevision = _installedState.GetInstalledRevision(id);
+            ManifestInstance? manifest = await TryGetManifestInstanceAsync(id);
+
+            PackAutoUpdateAction action = PackAutoUpdate.Decide(id, autoUpdateEnabled: true, installedRevision, manifest);
+
+            if (action == PackAutoUpdateAction.FailClosed)
+            {
+                vm.LaunchFail("无法检查整合包更新，未启动。");
+                MessageBox.Show(
+                    this,
+                    "无法检查整合包更新（资源站不可用或整合包已下架），已取消启动，避免运行过旧版本。\n\n如要离线启动已安装版本，请在设置中关闭“启动前自动更新整合包”。",
+                    "自动更新失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (action == PackAutoUpdateAction.LaunchInstalled)
+                return true;
+
+            // Update required: install the manifest revision before launching.
+            return await UpdatePackBeforeLaunchAsync(vm, manifest!);
+        }
+
+        /// <summary>Installs the manifest revision before launch; returns false (and does not launch) on failure.</summary>
+        private async Task<bool> UpdatePackBeforeLaunchAsync(InstanceCardViewModel vm, ManifestInstance manifest)
+        {
+            vm.BeginPackUpdate(manifest.Revision);
+
+            var progress = new Progress<PackInstallProgress>(vm.ReportPackUpdateProgress);
+
+            try
+            {
+                await _installer.InstallAsync(manifest, progress, CancellationToken.None);
+
+                // InstallAsync already recorded the new revision; refresh the matching pack card
+                // (if present) so the 服务器整合包 page is not stale.
+                foreach (PackCardViewModel card in _cards)
+                {
+                    if (string.Equals(card.InstanceId, manifest.Id, StringComparison.Ordinal))
+                        card.UpdateButtonState(_installedState.GetInstalledRevision(manifest.Id));
+                }
+
+                return true;
+            }
+            catch (ResourceException ex)
+            {
+                vm.LaunchFail("自动更新失败：" + ex.Message);
+                MessageBox.Show(
+                    this,
+                    "自动更新失败，未启动旧版本：\n" + ex.Message + "\n\n如要离线启动已安装版本，请在设置中关闭“启动前自动更新整合包”。",
+                    "自动更新失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                vm.LaunchFail("自动更新失败：发生了未知错误。");
+                MessageBox.Show(
+                    this,
+                    "自动更新失败，未启动旧版本。\n" + ex.Message + "\n\n如要离线启动已安装版本，请在设置中关闭“启动前自动更新整合包”。",
+                    "自动更新失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Resolves a manifest entry by id, preferring the already-loaded pack cards and falling
+        /// back to a fresh manifest fetch. Returns null on not-found/fetch failure (caller errors).
+        /// </summary>
+        private async Task<ManifestInstance?> TryGetManifestInstanceAsync(string id)
+        {
+            foreach (PackCardViewModel card in _cards)
+            {
+                if (string.Equals(card.InstanceId, id, StringComparison.Ordinal))
+                    return card.Instance;
+            }
+
+            try
+            {
+                ResourceManifest manifest = await _manifestClient.GetManifestAsync();
+                foreach (ManifestInstance instance in manifest.Instances)
+                {
+                    if (string.Equals(instance.Id, id, StringComparison.Ordinal))
+                        return instance;
+                }
+            }
+            catch
+            {
+                // Fetch failure (network/signature/allowlist) — the caller fails closed.
+            }
+
+            return null;
         }
 
         private void OpenInstanceDirButton_Click(object sender, RoutedEventArgs e)
@@ -468,6 +592,8 @@ namespace CMUmcl
             InstancesDirectoryTextBox.Text = _settings.InstancesDirectory ?? string.Empty;
             UpdateInstancesDirectoryHint();
             ShowInstancesError(null);
+
+            AutoUpdatePacksCheck.IsChecked = _settings.AutoUpdatePacks;
 
             UpdateJavaDetectedText();
             ClearErrors();
@@ -737,6 +863,7 @@ namespace CMUmcl
                             ? (VersionIsolation)isolationIndex
                             : VersionIsolation.ModdedOnly;
                         _settings.InstancesDirectory = newInstancesDirectory;
+                        _settings.AutoUpdatePacks = AutoUpdatePacksCheck.IsChecked == true;
 
                         bool saved = _settingsStore.Save(_settings);
                         bool applied = saved && _installedState.ApplyMigration(result.UpdatedRecords);
@@ -780,6 +907,7 @@ namespace CMUmcl
                 ? (VersionIsolation)isolationIndex
                 : VersionIsolation.ModdedOnly;
             _settings.InstancesDirectory = newInstancesDirectory;
+            _settings.AutoUpdatePacks = AutoUpdatePacksCheck.IsChecked == true;
 
             _settingsStore.Save(_settings);
             SettingsStatusText.Text = "设置已保存。";

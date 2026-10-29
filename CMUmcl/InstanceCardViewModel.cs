@@ -117,6 +117,54 @@ namespace CMUmcl
             StatusText = "准备启动…";
         }
 
+        /// <summary>Enters the busy (pre-launch pack update) state for a server pack.</summary>
+        public void BeginPackUpdate(int targetRevision)
+        {
+            ButtonEnabled = false;
+            ButtonText = "更新中…";
+            IsProgressVisible = true;
+            IsIndeterminate = true;
+            ProgressValue = 0;
+            StatusText = $"正在更新整合包 r{targetRevision}…";
+        }
+
+        /// <summary>Applies a pack-update progress report to the card (mirrors install progress stages).</summary>
+        public void ReportPackUpdateProgress(PackInstallProgress p)
+        {
+            IsProgressVisible = true;
+            if (!string.IsNullOrEmpty(p.Message))
+                StatusText = p.Message;
+
+            if (p.Stage == "下载整合包")
+            {
+                if (p.TotalBytes is long total && total > 0)
+                {
+                    IsIndeterminate = false;
+                    ProgressValue = p.BytesDownloaded * 100.0 / total;
+                }
+                else
+                {
+                    IsIndeterminate = true;
+                }
+            }
+            else if (p.Stage == "下载文件")
+            {
+                if (p.TotalFiles > 0)
+                {
+                    IsIndeterminate = false;
+                    ProgressValue = p.CurrentFile * 100.0 / p.TotalFiles;
+                }
+                else
+                {
+                    IsIndeterminate = true;
+                }
+            }
+            else
+            {
+                IsIndeterminate = true;
+            }
+        }
+
         /// <summary>Marks the launch as failed and re-enables the button.</summary>
         public void LaunchFail(string message)
         {
