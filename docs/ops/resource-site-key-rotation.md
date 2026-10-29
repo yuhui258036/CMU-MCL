@@ -293,7 +293,7 @@ curl.exe -fsS https://103.24.216.15/manifest.json -o manifest.json
 curl.exe -fsS https://103.24.216.15/manifest.json.sig -o manifest.json.sig
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File "D:\新启动器\scripts\verify-manifest-signature.ps1" `
+  -File "D:\新启动器\docs\ops\verify-manifest-signature.ps1" `
   -PublicKey "D:\secure\cmumcl-keys-2026-11\manifest-signing-public-2026-11.pem" `
   -Manifest "$checkDir\manifest.json" `
   -Signature "$checkDir\manifest.json.sig"
