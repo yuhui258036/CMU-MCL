@@ -1,0 +1,898 @@
+<UserControl x:Class="CMUmcl.CreateInstanceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="#1F2937"
+             FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI"
+             TextOptions.TextFormattingMode="Ideal">
+    <UserControl.Resources>
+
+        <!-- ============ Light theme palette (local, does not touch App/MainWindow) ============ -->
+        <SolidColorBrush x:Key="CivBg" Color="#F5F6F8" />
+        <SolidColorBrush x:Key="CivCard" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="CivBorder" Color="#E5E7EB" />
+        <SolidColorBrush x:Key="CivBorderStrong" Color="#D1D5DB" />
+        <SolidColorBrush x:Key="CivText" Color="#1F2937" />
+        <SolidColorBrush x:Key="CivTextMuted" Color="#6B7280" />
+        <SolidColorBrush x:Key="CivTextFaint" Color="#9CA3AF" />
+        <SolidColorBrush x:Key="CivAccent" Color="#2563EB" />
+        <SolidColorBrush x:Key="CivAccentSoft" Color="#EFF6FF" />
+        <SolidColorBrush x:Key="CivAccentBorder" Color="#BFDBFE" />
+        <SolidColorBrush x:Key="CivSuccess" Color="#16A34A" />
+        <SolidColorBrush x:Key="CivSuccessSoft" Color="#ECFDF5" />
+        <SolidColorBrush x:Key="CivDanger" Color="#DC2626" />
+
+        <!-- ============ Shared button template (overlay hover so accent buttons stay blue) ============ -->
+        <ControlTemplate x:Key="CivButtonTemplate" TargetType="Button">
+            <Border x:Name="border" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8">
+                <Grid>
+                    <Border x:Name="overlay" Background="Transparent" CornerRadius="8" />
+                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="overlay" Property="Background" Value="#0A000000" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="overlay" Property="Background" Value="#14000000" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- ============ Implicit button (light, overrides App/MainWindow implicit dark styles) ============ -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template" Value="{StaticResource CivButtonTemplate}" />
+        </Style>
+
+        <Style x:Key="CivPrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource CivAccent}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivAccent}" />
+            <Setter Property="Padding" Value="20,0" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="CivSecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorderStrong}" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="MinHeight" Value="36" />
+        </Style>
+
+        <Style x:Key="CivLinkButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource CivAccent}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Top-bar back chevron -->
+        <Style x:Key="CivBackButton" TargetType="Button">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E5E7EB" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#D1D5DB" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Landing cards -->
+        <Style x:Key="CivLandingCard" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="24,34" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14">
+                            <Grid>
+                                <Border x:Name="overlay" Background="Transparent" CornerRadius="14" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccentBorder}" />
+                                <Setter TargetName="overlay" Property="Background" Value="#06000000" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="overlay" Property="Background" Value="#12000000" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- List row card -->
+        <Style x:Key="CivRowButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <Grid>
+                                <Border x:Name="overlay" Background="Transparent" CornerRadius="12" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccentBorder}" />
+                                <Setter TargetName="overlay" Property="Background" Value="#08000000" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="overlay" Property="Background" Value="#12000000" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Loader card -->
+        <Style x:Key="CivLoaderCard" TargetType="Button">
+            <Setter Property="Width" Value="224" />
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16,14" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <Grid>
+                                <Border x:Name="overlay" Background="Transparent" CornerRadius="12" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccentBorder}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccent}" />
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource CivAccentSoft}" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ============ TextBox (light) ============ -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="CaretBrush" Value="{StaticResource CivText}" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ============ ComboBox (light) ============ -->
+        <Style x:Key="CivComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="6" Margin="4,1">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource CivAccent}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource CivCard}" />
+            <Setter Property="Foreground" Value="{StaticResource CivText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CivBorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,0,4,0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MaxDropDownHeight" Value="280" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource CivComboBoxItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid x:Name="templateRoot">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border x:Name="border" Grid.ColumnSpan="2"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8" />
+
+                            <ToggleButton x:Name="toggleButton" Grid.Column="1"
+                                          Width="34" Background="Transparent" BorderThickness="0"
+                                          ClickMode="Press" Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Grid Background="Transparent">
+                                            <TextBlock x:Name="arrow" Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="10" Foreground="{StaticResource CivTextMuted}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="arrow" Property="Foreground" Value="{StaticResource CivText}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="contentPresenter" Grid.Column="0"
+                                              Margin="{TemplateBinding Padding}"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              VerticalAlignment="Center" HorizontalAlignment="Left"
+                                              IsHitTestVisible="False" />
+
+                            <TextBox x:Name="PART_EditableTextBox" Grid.Column="0"
+                                     Margin="{TemplateBinding Padding}"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     CaretBrush="{StaticResource CivText}"
+                                     VerticalContentAlignment="Center" VerticalAlignment="Center"
+                                     HorizontalAlignment="Left"
+                                     Visibility="Hidden" />
+
+                            <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True"
+                                   Focusable="False" PopupAnimation="Slide"
+                                   IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <Border x:Name="dropDownBorder" Margin="0,4,0,0"
+                                        Background="{StaticResource CivCard}"
+                                        BorderBrush="{StaticResource CivBorderStrong}" BorderThickness="1"
+                                        CornerRadius="8"
+                                        MinWidth="{Binding ActualWidth, ElementName=templateRoot}">
+                                    <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="contentPresenter" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CivAccent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5" />
+                                <Setter Property="Foreground" Value="{StaticResource CivTextMuted}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ============ ProgressBar (light) ============ -->
+        <Style TargetType="ProgressBar">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Foreground" Value="{StaticResource CivAccent}" />
+            <Setter Property="Background" Value="{StaticResource CivBorder}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ===================== Top bar ===================== -->
+        <Border Grid.Row="0" Background="{StaticResource CivCard}"
+                BorderBrush="{StaticResource CivBorder}" BorderThickness="0,0,0,1"
+                Padding="20,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="BackButton" Grid.Column="0" Style="{StaticResource CivBackButton}"
+                        Click="BackButton_Click">
+                    <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                </Button>
+                <TextBlock x:Name="TitleText" Grid.Column="1" Text="创建实例" FontSize="20"
+                           FontWeight="SemiBold" Foreground="{StaticResource CivText}"
+                           VerticalAlignment="Center" Margin="14,0,0,0"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+
+        <!-- ===================== Content host ===================== -->
+        <Grid Grid.Row="1" Background="{StaticResource CivBg}">
+
+            <!-- ============ Step 0: Landing ============ -->
+            <Grid x:Name="LandingPanel">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MaxWidth="680" Margin="40">
+                    <TextBlock Text="创建实例" FontSize="30" FontWeight="SemiBold"
+                               Foreground="{StaticResource CivText}" HorizontalAlignment="Center" />
+                    <TextBlock Text="实例是带有特定加载器、游戏版本和模组的一套 Minecraft 配置。"
+                               FontSize="14" Foreground="{StaticResource CivTextMuted}"
+                               HorizontalAlignment="Center" Margin="0,10,0,32"
+                               TextAlignment="Center" TextWrapping="Wrap" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0" Style="{StaticResource CivLandingCard}"
+                                Margin="0,0,12,0" Click="LandingNewButton_Click">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="32"
+                                           Foreground="{StaticResource CivAccent}" HorizontalAlignment="Center" />
+                                <TextBlock Text="全新创建" FontSize="17" FontWeight="SemiBold"
+                                           Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
+                                           Margin="0,14,0,0" />
+                                <TextBlock Text="选择游戏版本与加载器，创建全新实例" FontSize="12"
+                                           Foreground="{StaticResource CivTextMuted}" HorizontalAlignment="Center"
+                                           Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="1" Style="{StaticResource CivLandingCard}"
+                                Margin="12,0,0,0" IsEnabled="False">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" FontSize="32"
+                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center" />
+                                <TextBlock Text="导入已有" FontSize="17" FontWeight="SemiBold"
+                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center"
+                                           Margin="0,14,0,0" />
+                                <TextBlock Text="暂未开放" FontSize="12"
+                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <Button Content="返回实例库" Style="{StaticResource CivLinkButton}"
+                            HorizontalAlignment="Center" Margin="0,28,0,0"
+                            Click="LandingBackLink_Click" />
+                </StackPanel>
+            </Grid>
+
+            <!-- ============ Step 1: Game versions ============ -->
+            <Grid x:Name="GameVersionPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Toolbar -->
+                <Border Grid.Row="0" Background="{StaticResource CivCard}"
+                        BorderBrush="{StaticResource CivBorder}" BorderThickness="0,0,0,1"
+                        Padding="28,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0" Margin="0,0,16,0">
+                            <TextBox x:Name="GameSearchBox" TextChanged="GameSearchBox_TextChanged" />
+                            <TextBlock x:Name="GameSearchPlaceholder" Text="输入版本名称进行搜索"
+                                       Foreground="{StaticResource CivTextFaint}" FontSize="14"
+                                       VerticalAlignment="Center" Margin="14,0,0,0"
+                                       IsHitTestVisible="False" />
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                    Margin="0,0,16,0">
+                            <TextBlock Text="版本类型" Foreground="{StaticResource CivTextMuted}"
+                                       FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox x:Name="CategoryCombo" Width="150"
+                                      SelectionChanged="CategoryCombo_SelectionChanged" />
+                        </StackPanel>
+
+                        <Button Grid.Column="2" Style="{StaticResource CivSecondaryButton}"
+                                Click="RefreshVersionsButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="刷新" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- List + states -->
+                <Grid Grid.Row="1">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="GameVersionList" Margin="28,20">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource CivRowButton}" Click="GameVersionRow_Click">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0"
+                                                   Source="pack://application:,,,/Assets/InstanceIcons/grass-block.png"
+                                                   Width="36" Height="36" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource CivText}"
+                                                       VerticalAlignment="Center" Margin="14,0,0,0" />
+                                            <Border Grid.Column="2" Background="{StaticResource CivAccentSoft}"
+                                                    BorderBrush="{StaticResource CivAccentBorder}" BorderThickness="1"
+                                                    CornerRadius="8" Padding="8,2" Margin="12,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding CategoryLabel}" FontSize="11"
+                                                           Foreground="{StaticResource CivAccent}" />
+                                            </Border>
+                                            <TextBlock Grid.Column="3" Text="{Binding DateText}" FontSize="12"
+                                                       Foreground="{StaticResource CivTextMuted}"
+                                                       VerticalAlignment="Center" Margin="16,0,0,0" />
+                                            <TextBlock Grid.Column="4" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="12" Foreground="{StaticResource CivTextFaint}"
+                                                       VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <StackPanel x:Name="GameVersionLoading" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                        <ProgressBar Width="160" Height="4" IsIndeterminate="True" />
+                        <TextBlock Text="正在获取 Minecraft 版本列表…" Foreground="{StaticResource CivTextMuted}"
+                                   FontSize="14" HorizontalAlignment="Center" Margin="0,16,0,0" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="GameVersionEmpty" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="44"
+                                   Foreground="{StaticResource CivBorderStrong}" HorizontalAlignment="Center" />
+                        <TextBlock Text="没有匹配的版本。" Foreground="{StaticResource CivTextMuted}"
+                                   FontSize="14" HorizontalAlignment="Center" Margin="0,14,0,0" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="GameVersionError" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed" MaxWidth="520">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="34"
+                                   Foreground="{StaticResource CivDanger}" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="GameVersionErrorText" Text="" Foreground="{StaticResource CivDanger}"
+                                   FontSize="14" TextWrapping="Wrap" HorizontalAlignment="Center"
+                                   Margin="0,14,0,0" />
+                        <Button Content="重试" MinWidth="100" Style="{StaticResource CivPrimaryButton}"
+                                HorizontalAlignment="Center" Margin="0,18,0,0"
+                                Click="RefreshVersionsButton_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- ============ Step 2: Loaders ============ -->
+            <Grid x:Name="LoaderPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="28,24" HorizontalAlignment="Left" MaxWidth="960">
+
+                        <TextBlock Text="游戏实例名称" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource CivText}" />
+                        <TextBox x:Name="NameBox" Margin="0,8,0,0" MaxWidth="420"
+                                 HorizontalAlignment="Left" TextChanged="NameBox_TextChanged" />
+
+                        <TextBlock Text="加载器" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource CivText}" Margin="0,26,0,12" />
+                        <ItemsControl x:Name="LoaderCards">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource CivLoaderCard}" Click="LoaderCard_Click">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0" Source="{Binding IconSource}"
+                                                   Width="40" Height="40" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource CivText}" />
+                                                <TextBlock Text="{Binding Status}" FontSize="12" Margin="0,4,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource CivTextMuted}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource CivAccent}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="12" Foreground="{StaticResource CivTextFaint}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="附加组件" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource CivText}" Margin="0,10,0,12" />
+                        <Border x:Name="FabricApiCard" Width="224" HorizontalAlignment="Left"
+                                Background="{StaticResource CivCard}" BorderBrush="{StaticResource CivBorder}"
+                                BorderThickness="1" CornerRadius="12" Padding="16,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="0" Source="pack://application:,,,/Assets/InstanceIcons/Fabric.png"
+                                       Width="40" Height="40" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Fabric API" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource CivText}" />
+                                    <TextBlock x:Name="FabricApiStatusText" Text="不安装" FontSize="12"
+                                               Foreground="{StaticResource CivTextMuted}" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <TextBlock x:Name="FabricApiCheckGlyph" Grid.Column="2" Text="&#xE73E;"
+                                           FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           Foreground="{StaticResource CivSuccess}" VerticalAlignment="Center"
+                                           Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Bottom install bar -->
+                <Border Grid.Row="1" Background="{StaticResource CivCard}"
+                        BorderBrush="{StaticResource CivBorder}" BorderThickness="0,1,0,0"
+                        Padding="28,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="InstallHintText" Grid.Column="0" Text=""
+                                   Foreground="{StaticResource CivTextMuted}" FontSize="12"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0" />
+                        <Button x:Name="InstallButton" Grid.Column="1" Content="安装" MinWidth="140"
+                                Style="{StaticResource CivPrimaryButton}" Click="InstallButton_Click" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- ============ Step 3: Loader versions ============ -->
+            <Grid x:Name="LoaderVersionPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="{StaticResource CivCard}"
+                        BorderBrush="{StaticResource CivBorder}" BorderThickness="0,0,0,1"
+                        Padding="28,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0" Margin="0,0,16,0">
+                            <TextBox x:Name="LoaderVersionSearchBox" TextChanged="LoaderVersionSearchBox_TextChanged" />
+                            <TextBlock x:Name="LoaderVersionSearchPlaceholder" Text="输入版本名称进行搜索"
+                                       Foreground="{StaticResource CivTextFaint}" FontSize="14"
+                                       VerticalAlignment="Center" Margin="14,0,0,0"
+                                       IsHitTestVisible="False" />
+                        </Grid>
+
+                        <TextBlock Grid.Column="1" Text="全部" Foreground="{StaticResource CivTextMuted}"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                        <Button Grid.Column="2" Style="{StaticResource CivSecondaryButton}"
+                                Click="RefreshLoaderVersionsButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="刷新" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="1">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="LoaderVersionList" Margin="28,20">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource CivRowButton}" Click="LoaderVersionRow_Click">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0" Source="{Binding IconSource}"
+                                                   Width="36" Height="36" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Version}" FontSize="15" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource CivText}" />
+                                                <TextBlock Text="{Binding Detail}" FontSize="12"
+                                                           Foreground="{StaticResource CivTextMuted}" Margin="0,3,0,0" />
+                                            </StackPanel>
+                                            <Border Grid.Column="2" Background="#F3F4F6"
+                                                    BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
+                                                    CornerRadius="8" Padding="8,2" Margin="12,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding GameText}" FontSize="11"
+                                                           Foreground="{StaticResource CivTextMuted}" />
+                                            </Border>
+                                            <TextBlock Grid.Column="3" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="12" Foreground="{StaticResource CivTextFaint}"
+                                                       VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <StackPanel x:Name="LoaderVersionLoading" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                        <ProgressBar Width="160" Height="4" IsIndeterminate="True" />
+                        <TextBlock Text="正在获取加载器版本…" Foreground="{StaticResource CivTextMuted}"
+                                   FontSize="14" HorizontalAlignment="Center" Margin="0,16,0,0" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="LoaderVersionEmpty" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="44"
+                                   Foreground="{StaticResource CivBorderStrong}" HorizontalAlignment="Center" />
+                        <TextBlock Text="没有可供安装的版本，点击返回" Foreground="{StaticResource CivTextMuted}"
+                                   FontSize="14" HorizontalAlignment="Center" Margin="0,14,0,0" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="LoaderVersionError" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed" MaxWidth="520">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="34"
+                                   Foreground="{StaticResource CivDanger}" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="LoaderVersionErrorText" Text="" Foreground="{StaticResource CivDanger}"
+                                   FontSize="14" TextWrapping="Wrap" HorizontalAlignment="Center"
+                                   Margin="0,14,0,0" />
+                        <Button Content="重试" MinWidth="100" Style="{StaticResource CivPrimaryButton}"
+                                HorizontalAlignment="Center" Margin="0,18,0,0"
+                                Click="RefreshLoaderVersionsButton_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- ============ Step 4: Progress ============ -->
+            <Grid x:Name="ProgressPanel" Visibility="Collapsed">
+                <Border Width="540" Background="{StaticResource CivCard}"
+                        BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
+                        CornerRadius="14" Padding="32,36"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel>
+                        <ProgressBar x:Name="ProvisionBar" Height="8" Minimum="0" Maximum="100"
+                                     IsIndeterminate="True" />
+                        <TextBlock x:Name="ProgressStageText" Text="正在创建实例…" FontSize="15"
+                                   FontWeight="SemiBold" Foreground="{StaticResource CivText}"
+                                   Margin="0,20,0,0" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="ProgressMessageText" Text="" FontSize="13"
+                                   Foreground="{StaticResource CivTextMuted}" Margin="0,8,0,0"
+                                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+
+                        <StackPanel x:Name="ProgressErrorPanel" Visibility="Collapsed" Margin="0,20,0,0">
+                            <TextBlock x:Name="ProgressErrorText" Text="" FontSize="13"
+                                       Foreground="{StaticResource CivDanger}" TextWrapping="Wrap"
+                                       TextAlignment="Center" HorizontalAlignment="Center" MaxWidth="440" />
+                            <TextBlock x:Name="ProgressErrorHint" Text="" FontSize="12"
+                                       Foreground="{StaticResource CivTextMuted}" Margin="0,6,0,0"
+                                       HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+                                <Button x:Name="RetryDownloadButton" Content="重试下载" MinWidth="110"
+                                        Style="{StaticResource CivPrimaryButton}" Margin="0,0,10,0"
+                                        Click="RetryDownloadButton_Click" />
+                                <Button x:Name="ErrorReturnListButton" Content="返回实例列表" MinWidth="110"
+                                        Style="{StaticResource CivSecondaryButton}"
+                                        Click="ErrorReturnListButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ============ Step 5: Success ============ -->
+            <Grid x:Name="SuccessPanel" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560" Margin="40">
+                    <Border Width="84" Height="84" CornerRadius="42"
+                            Background="{StaticResource CivSuccessSoft}" HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE930;" FontFamily="Segoe MDL2 Assets" FontSize="42"
+                                   Foreground="{StaticResource CivSuccess}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="实例创建成功" FontSize="22" FontWeight="SemiBold"
+                               Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
+                               Margin="0,20,0,0" />
+                    <TextBlock x:Name="SuccessNameText" Text="" FontSize="15"
+                               Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
+                               Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                        <Border Background="#F3F4F6" BorderBrush="{StaticResource CivBorder}" BorderThickness="1"
+                                CornerRadius="8" Padding="10,3">
+                            <TextBlock x:Name="SuccessGameText" Text="" FontSize="12"
+                                       Foreground="{StaticResource CivTextMuted}" />
+                        </Border>
+                        <Border Background="{StaticResource CivAccentSoft}"
+                                BorderBrush="{StaticResource CivAccentBorder}" BorderThickness="1"
+                                CornerRadius="8" Padding="10,3" Margin="8,0,0,0">
+                            <TextBlock x:Name="SuccessLoaderText" Text="" FontSize="12"
+                                       Foreground="{StaticResource CivAccent}" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock x:Name="SuccessWarningText" Text="" FontSize="12"
+                               Foreground="{StaticResource CivDanger}" HorizontalAlignment="Center"
+                               Margin="0,14,0,0" TextWrapping="Wrap" MaxWidth="480"
+                               TextAlignment="Center" Visibility="Collapsed" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,28,0,0">
+                        <Button x:Name="SuccessOpenDirButton" Content="打开目录" MinWidth="110"
+                                Style="{StaticResource CivSecondaryButton}" Margin="0,0,10,0"
+                                Click="SuccessOpenDirButton_Click" />
+                        <Button x:Name="SuccessReturnListButton" Content="返回实例列表" MinWidth="130"
+                                Style="{StaticResource CivPrimaryButton}"
+                                Click="SuccessReturnListButton_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+        </Grid>
+    </Grid>
+</UserControl>

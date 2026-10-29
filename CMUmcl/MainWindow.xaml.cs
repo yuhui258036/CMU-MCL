@@ -67,6 +67,9 @@ namespace CMUmcl
             CardsList.ItemsSource = _cards;
             InstancesList.ItemsSource = _instances;
 
+            CreateInstanceView.BackRequested += CreateInstanceView_BackRequested;
+            CreateInstanceView.InstanceCreated += CreateInstanceView_InstanceCreated;
+
             _settings = _settingsStore.Load();
             InitializeSettingsPage();
             ShowPacksView();
@@ -83,20 +86,42 @@ namespace CMUmcl
 
         private void PacksNavButton_Click(object sender, RoutedEventArgs e)
         {
+            CloseCreateInstanceView();
             if (_currentPage != MainPage.Packs)
                 ShowPacksView();
         }
 
         private void InstancesNavButton_Click(object sender, RoutedEventArgs e)
         {
+            CloseCreateInstanceView();
             if (_currentPage != MainPage.Instances)
                 ShowInstancesView();
         }
 
         private void SettingsNavButton_Click(object sender, RoutedEventArgs e)
         {
+            CloseCreateInstanceView();
             if (_currentPage != MainPage.Settings)
                 ShowSettingsView();
+        }
+
+        /// <summary>Closes the in-main create flow if it is currently open (cancelling in-flight work).</summary>
+        private void CloseCreateInstanceView()
+        {
+            if (CreateInstanceView.Visibility == Visibility.Visible)
+                CreateInstanceView.Close();
+        }
+
+        private void CreateInstanceView_BackRequested()
+        {
+            CreateInstanceView.Close();
+            ShowInstancesView();
+        }
+
+        private void CreateInstanceView_InstanceCreated()
+        {
+            CreateInstanceView.Close();
+            ShowInstancesView();
         }
 
         private void ViewInstancesButton_Click(object sender, RoutedEventArgs e)
@@ -187,16 +212,7 @@ namespace CMUmcl
 
         private void NewInstanceButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new CreateInstanceWindow(_localInstanceService, _launchService)
-            {
-                Owner = this,
-            };
-
-            bool? ok = dialog.ShowDialog();
-            if (ok == true && dialog.Result != null)
-            {
-                ShowInstancesView();
-            }
+            CreateInstanceView.Open(_localInstanceService, _launchService);
         }
 
         // ------------------------------------------------------------------
