@@ -83,9 +83,16 @@ ssh -N -L 19443:127.0.0.1:9443 root@103.24.216.15
 以下命令直接在本机 PowerShell 执行，不需要先登录服务器。SSH 只用于管理后台隧道、服务器文件和 systemd 操作。
 
 ```powershell
+$checkDir = Join-Path $env:TEMP "cmumcl-resource-check"
+New-Item -ItemType Directory -Path $checkDir -Force | Out-Null
+Set-Location $checkDir
+
 curl.exe -fsS https://103.24.216.15/manifest.json -o manifest.json
 curl.exe -fsS https://103.24.216.15/manifest.json.sig -o manifest.json.sig
+Get-Item manifest.json, manifest.json.sig
 ```
+
+不要从 `C:\Windows\System32` 运行并写相对文件；该目录通常不可写，会报 `curl: (23) client returned ERROR on write`。
 
 `443` 正常、`9443` 只监听回环地址，是当前预期的部署方式。
 
