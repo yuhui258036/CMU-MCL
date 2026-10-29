@@ -198,7 +198,11 @@ namespace CMUmcl.Launch
             };
         }
 
-        /// <summary>Shared install path: load settings, install vanilla, select Java, install the loader. No session/process.</summary>
+        /// <summary>
+        /// Shared install path: load settings, then either reuse an already-provisioned base/loader
+        /// install (skipping downloads) or install vanilla + select Java + install the loader once.
+        /// No session/process.
+        /// </summary>
         private async Task<PreparedInstall> PrepareCoreAsync(
             string instanceDir,
             InstanceMetadata metadata,
@@ -218,6 +222,27 @@ namespace CMUmcl.Launch
             var minecraftPath = new MinecraftPath(LauncherPaths.MinecraftDirectory);
             var launcher = new MinecraftLauncher(minecraftPath);
 
+            string signature = ProvisioningMarker.ComputeSignature(gameVersion, loader, loaderVersion);
+
+            // Reuse an existing install only when the marker matches and the version files are present.
+            if (ProvisioningMarker.TryReadReady(
+                    instanceDir, LauncherPaths.MinecraftDirectory, signature, out string readyVersionName))
+            {
+                progress?.Report(new LaunchProgress { Stage = "准备", Message = "游戏文件已就绪，跳过下载。" });
+
+                // Java must still be resolved (and possibly downloaded) on every launch.
+                JavaInfo readyJava = await SelectJavaAsync(gameVersion, settings, progress, ct).ConfigureAwait(false);
+
+                return new PreparedInstall
+                {
+                    VersionName = readyVersionName,
+                    Java = readyJava,
+                    Launcher = launcher,
+                    Settings = settings,
+                    Loader = loader,
+                };
+            }
+
             // Install vanilla.
             progress?.Report(new LaunchProgress { Stage = "安装原版", Message = $"正在安装 Minecraft {gameVersion}…" });
             await launcher.InstallAsync(
@@ -231,6 +256,9 @@ namespace CMUmcl.Launch
             JavaInfo java = await SelectJavaAsync(gameVersion, settings, progress, ct).ConfigureAwait(false);
 
             string versionName = await InstallLoaderAsync(gameVersion, loader, loaderVersion, java, launcher, progress, ct).ConfigureAwait(false);
+
+            // Record the marker only after a successful install so the next launch can skip downloads.
+            ProvisioningMarker.TryWrite(instanceDir, signature, versionName);
 
             return new PreparedInstall
             {
