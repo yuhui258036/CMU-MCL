@@ -92,7 +92,7 @@ namespace CMUmcl
     /// </summary>
     public partial class CreateInstanceView : UserControl
     {
-        private enum Step { Landing, GameVersion, Loader, LoaderVersion, Progress, Success }
+        private enum Step { Landing, Import, GameVersion, Loader, LoaderVersion, Progress, Success }
 
         private readonly ObservableCollection<LoaderCard> _loaderCards = new();
         private readonly ObservableCollection<GameVersionRow> _gameVersionRows = new();
@@ -103,6 +103,10 @@ namespace CMUmcl
         private VersionCatalogService _catalog = null!;
         private FabricApiInstaller _fabricApi = null!;
         private CancellationTokenSource _cts = new();
+
+        private readonly InstanceImportService _importService = new(new InstalledStateStore());
+        private string? _importSourcePath;
+        private bool _importing;
 
         private readonly List<MinecraftVersionInfo> _gameVersions = new();
         private readonly List<LoaderVersionInfo> _loaderVersions = new();
@@ -215,6 +219,13 @@ namespace CMUmcl
             LoaderVersionSearchBox.Text = string.Empty;
             CategoryCombo.SelectedIndex = 1;
 
+            _importSourcePath = null;
+            ImportNameBox.Text = string.Empty;
+            ImportPathText.Text = "尚未选择文件夹";
+            ImportStatusText.Text = string.Empty;
+            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            UpdateImportButton();
+
             RefreshLoaderStepUi();
         }
 
@@ -227,6 +238,7 @@ namespace CMUmcl
             _step = step;
 
             LandingPanel.Visibility = step == Step.Landing ? Visibility.Visible : Visibility.Collapsed;
+            ImportPanel.Visibility = step == Step.Import ? Visibility.Visible : Visibility.Collapsed;
             GameVersionPanel.Visibility = step == Step.GameVersion ? Visibility.Visible : Visibility.Collapsed;
             LoaderPanel.Visibility = step == Step.Loader ? Visibility.Visible : Visibility.Collapsed;
             LoaderVersionPanel.Visibility = step == Step.LoaderVersion ? Visibility.Visible : Visibility.Collapsed;
@@ -238,6 +250,7 @@ namespace CMUmcl
 
             TitleText.Text = step switch
             {
+                Step.Import => "导入已有实例",
                 Step.GameVersion => "选择游戏版本",
                 Step.Loader => $"安装新游戏 - {_selectedGameVersion?.Name ?? string.Empty}",
                 Step.LoaderVersion => $"安装新游戏 - 选择 {LoaderDisplay(_selectedLoader)} 版本",
@@ -253,6 +266,9 @@ namespace CMUmcl
             {
                 case Step.Landing:
                     BackRequested?.Invoke();
+                    break;
+                case Step.Import:
+                    ShowStep(Step.Landing);
                     break;
                 case Step.GameVersion:
                     ShowStep(Step.Landing);
@@ -275,9 +291,121 @@ namespace CMUmcl
                 ApplyGameVersionFilter();
         }
 
+        private void LandingImportButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowStep(Step.Import);
+        }
+
         private void LandingBackLink_Click(object sender, RoutedEventArgs e)
         {
             BackRequested?.Invoke();
+        }
+
+        // ------------------------------------------------------------------
+        // Step: import existing
+        // ------------------------------------------------------------------
+
+        private void ImportChooseButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "选择实例文件夹",
+            };
+
+            if (dialog.ShowDialog(Window.GetWindow(this)) != true)
+                return;
+
+            string? folder = dialog.FolderName;
+            if (string.IsNullOrWhiteSpace(folder))
+                return;
+
+            _importSourcePath = folder;
+            ImportPathText.Text = folder;
+
+            string folderName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!string.IsNullOrWhiteSpace(folderName))
+                ImportNameBox.Text = folderName;
+
+            ImportStatusText.Text = string.Empty;
+            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            UpdateImportButton();
+        }
+
+        private async void ImportButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_importing)
+                return;
+
+            string source = _importSourcePath ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(source) || !Directory.Exists(source))
+            {
+                ShowImportError("请先选择有效的实例文件夹。");
+                return;
+            }
+
+            _importing = true;
+            SetImportBusy(true);
+
+            string name = ImportNameBox.Text?.Trim() ?? string.Empty;
+            var progress = new Progress<ImportProgress>(ReportImportProgress);
+
+            try
+            {
+                await _importService.ImportAsync(source, name, progress, _cts.Token);
+                InstanceCreated?.Invoke();
+            }
+            catch (InstanceImportException ex)
+            {
+                ShowImportError(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                // Leaving the view; the partial target was already rolled back by the service.
+            }
+            catch (Exception ex)
+            {
+                ShowImportError("导入实例时发生未知错误：" + ex.Message);
+            }
+            finally
+            {
+                _importing = false;
+                SetImportBusy(false);
+            }
+        }
+
+        private void ReportImportProgress(ImportProgress p)
+        {
+            if (string.IsNullOrWhiteSpace(p.Message))
+                return;
+
+            ImportStatusText.Text = p.Message;
+            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+        }
+
+        private void SetImportBusy(bool busy)
+        {
+            ImportChooseButton.IsEnabled = !busy;
+            ImportNameBox.IsEnabled = !busy;
+            ImportButton.Content = busy ? "正在导入…" : "导入";
+            ImportButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_importSourcePath);
+
+            if (busy)
+            {
+                ImportStatusText.Text = "正在导入…";
+                ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            }
+        }
+
+        private void ShowImportError(string message)
+        {
+            ImportStatusText.Text = message;
+            ImportStatusText.Foreground = (Brush)FindResource("CivDanger");
+            UpdateImportButton();
+        }
+
+        private void UpdateImportButton()
+        {
+            ImportButton.IsEnabled = !_importing && !string.IsNullOrWhiteSpace(_importSourcePath);
         }
 
         // ------------------------------------------------------------------

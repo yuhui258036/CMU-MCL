@@ -127,12 +127,14 @@
             </Setter>
         </Style>
 
-        <!-- Landing cards -->
+        <!-- Landing cards (fixed equal size so the pair is always symmetric) -->
         <Style x:Key="CivLandingCard" TargetType="Button">
+            <Setter Property="Width" Value="300" />
+            <Setter Property="Height" Value="180" />
             <Setter Property="Background" Value="{StaticResource CivCard}" />
             <Setter Property="BorderBrush" Value="{StaticResource CivBorder}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="24,34" />
+            <Setter Property="Padding" Value="24,30" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
@@ -449,14 +451,14 @@
                                HorizontalAlignment="Center" Margin="0,10,0,32"
                                TextAlignment="Center" TextWrapping="Wrap" />
 
-                    <Grid>
+                    <Grid HorizontalAlignment="Center">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <Button Grid.Column="0" Style="{StaticResource CivLandingCard}"
-                                Margin="0,0,12,0" Click="LandingNewButton_Click">
+                                Click="LandingNewButton_Click">
                             <StackPanel HorizontalAlignment="Center">
                                 <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="32"
                                            Foreground="{StaticResource CivAccent}" HorizontalAlignment="Center" />
@@ -470,16 +472,16 @@
                         </Button>
 
                         <Button Grid.Column="1" Style="{StaticResource CivLandingCard}"
-                                Margin="12,0,0,0" IsEnabled="False">
+                                Margin="20,0,0,0" Click="LandingImportButton_Click">
                             <StackPanel HorizontalAlignment="Center">
                                 <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" FontSize="32"
-                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center" />
+                                           Foreground="{StaticResource CivAccent}" HorizontalAlignment="Center" />
                                 <TextBlock Text="导入已有" FontSize="17" FontWeight="SemiBold"
-                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center"
+                                           Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
                                            Margin="0,14,0,0" />
-                                <TextBlock Text="暂未开放" FontSize="12"
-                                           Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center"
-                                           Margin="0,6,0,0" />
+                                <TextBlock Text="选择已有的实例文件夹，完整保留文件并导入" FontSize="12"
+                                           Foreground="{StaticResource CivTextMuted}" HorizontalAlignment="Center"
+                                           Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" />
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -488,6 +490,73 @@
                             HorizontalAlignment="Center" Margin="0,28,0,0"
                             Click="LandingBackLink_Click" />
                 </StackPanel>
+            </Grid>
+
+            <!-- ============ Step: Import existing ============ -->
+            <Grid x:Name="ImportPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                MaxWidth="560" Margin="40">
+                        <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" FontSize="40"
+                                   Foreground="{StaticResource CivAccent}" HorizontalAlignment="Center" />
+                        <TextBlock Text="导入已有实例" FontSize="22" FontWeight="SemiBold"
+                                   Foreground="{StaticResource CivText}" HorizontalAlignment="Center"
+                                   Margin="0,16,0,0" />
+                        <TextBlock Text="选择已有的实例文件夹（或 .minecraft 目录），将其完整复制到实例库。原文件夹不会被修改。"
+                                   FontSize="13" Foreground="{StaticResource CivTextMuted}"
+                                   HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                                   Margin="0,10,0,24" />
+
+                        <Button x:Name="ImportChooseButton" Style="{StaticResource CivSecondaryButton}"
+                                HorizontalAlignment="Center" MinWidth="200"
+                                Click="ImportChooseButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE838;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="选择实例文件夹" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Button>
+
+                        <TextBlock x:Name="ImportPathText" Text="尚未选择文件夹" FontSize="12"
+                                   Foreground="{StaticResource CivTextFaint}" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" Margin="0,12,0,0"
+                                   MaxWidth="480" />
+
+                        <TextBlock Text="实例名称" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource CivText}" Margin="0,24,0,8"
+                                   HorizontalAlignment="Center" />
+                        <TextBox x:Name="ImportNameBox" MinWidth="280" MaxWidth="420"
+                                 HorizontalAlignment="Center" />
+
+                        <TextBlock x:Name="ImportStatusText" Text="" FontSize="13"
+                                   Foreground="{StaticResource CivTextMuted}" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"
+                                   MaxWidth="480" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="1" Background="{StaticResource CivCard}"
+                        BorderBrush="{StaticResource CivBorder}" BorderThickness="0,1,0,0"
+                        Padding="28,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="ImportHintText" Grid.Column="0"
+                                   Text="原文件夹不会被修改；导入后可在实例库中启动。"
+                                   Foreground="{StaticResource CivTextMuted}" FontSize="12"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0" />
+                        <Button x:Name="ImportButton" Grid.Column="1" Content="导入" MinWidth="140"
+                                Style="{StaticResource CivPrimaryButton}" Click="ImportButton_Click" />
+                    </Grid>
+                </Border>
             </Grid>
 
             <!-- ============ Step 1: Game versions ============ -->
