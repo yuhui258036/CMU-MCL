@@ -4,14 +4,17 @@ using CMUmcl.Content;
 
 namespace CMUmcl
 {
-    /// <summary>View model backing one server-pack card in the main window.</summary>
+    /// <summary>View model backing one server-pack or local-instance card in the main window.</summary>
     public sealed class PackCardViewModel : INotifyPropertyChanged
     {
-        private readonly ManifestInstance _instance;
+        private readonly ManifestInstance? _instance;
+        private readonly string _instanceId;
 
+        /// <summary>Server-pack card backed by a manifest entry.</summary>
         public PackCardViewModel(ManifestInstance instance, int? installedRevision, string? displayName = null)
         {
             _instance = instance;
+            _instanceId = instance.Id;
 
             Name = string.IsNullOrWhiteSpace(displayName) ? instance.Name : displayName!;
             Description = string.IsNullOrWhiteSpace(instance.Description)
@@ -32,8 +35,32 @@ namespace CMUmcl
             UpdateButtonState(installedRevision);
         }
 
-        public ManifestInstance Instance => _instance;
-        public string InstanceId => _instance.Id;
+        /// <summary>Local-instance card backed by an on-disk instance.json (no manifest entry).</summary>
+        public PackCardViewModel(string localId, InstanceMetadata metadata, string displayName)
+        {
+            _instance = null;
+            _instanceId = localId;
+            IsLocal = true;
+
+            Name = displayName;
+            Description = "本地实例";
+            RevisionText = string.Empty;
+            GameText = $"Minecraft {metadata.Game ?? "?"} · {FormatLoader(metadata.Loader, metadata.LoaderVersion)}";
+            ServerText = string.Empty;
+            SizeText = "本地实例";
+            HasLoaderNote = false;
+
+            ButtonText = "启动游戏";
+            ButtonEnabled = true;
+            IsLaunchable = true;
+            StatusText = "已就绪";
+        }
+
+        public ManifestInstance? Instance => _instance;
+        public string InstanceId => _instanceId;
+
+        /// <summary>True for locally-created instances (no manifest entry, no pack install/update path).</summary>
+        public bool IsLocal { get; }
 
         private string _name = string.Empty;
         public string Name
@@ -97,7 +124,35 @@ namespace CMUmcl
 
         /// <summary>Updates the displayed name from the installed-state record (falls back to the manifest name).</summary>
         public void SetDisplayName(string? displayName)
-            => Name = string.IsNullOrWhiteSpace(displayName) ? _instance.Name : displayName!;
+        {
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                Name = displayName!;
+            }
+            else if (_instance != null)
+            {
+                Name = _instance.Name;
+            }
+            // Local cards keep their recorded name when the store has no override.
+        }
+
+        /// <summary>Formats a loader/version pair for display (local cards), with a friendly label for vanilla.</summary>
+        private static string FormatLoader(string? loader, string? loaderVersion)
+        {
+            string normalized = (loader ?? string.Empty).Trim().ToLowerInvariant();
+            string label = normalized switch
+            {
+                "" or "vanilla" => "原版",
+                "fabric" => "Fabric",
+                "forge" => "Forge",
+                "neoforge" => "NeoForge",
+                "quilt" => "Quilt",
+                _ => (loader ?? string.Empty).Trim(),
+            };
+
+            string version = (loaderVersion ?? string.Empty).Trim();
+            return string.IsNullOrEmpty(version) ? label : $"{label} {version}";
+        }
 
         /// <summary>Sets the card into an idle state reflecting the installed revision.</summary>
         public void UpdateButtonState(int? installedRevision)
@@ -113,7 +168,7 @@ namespace CMUmcl
                 StatusText = "尚未安装";
                 IsLaunchable = false;
             }
-            else if (installedRevision.Value >= _instance.Revision)
+            else if (installedRevision.Value >= _instance!.Revision)
             {
                 ButtonText = "启动游戏";
                 ButtonEnabled = true;
@@ -124,7 +179,7 @@ namespace CMUmcl
             {
                 ButtonText = "更新";
                 ButtonEnabled = true;
-                StatusText = $"可更新到 r{_instance.Revision}";
+                StatusText = $"可更新到 r{_instance!.Revision}";
                 IsLaunchable = false;
             }
         }
@@ -156,7 +211,7 @@ namespace CMUmcl
             ButtonText = "启动游戏";
             ButtonEnabled = true;
             IsLaunchable = true;
-            StatusText = $"已安装（r{_instance.Revision}）";
+            StatusText = $"已安装（r{_instance!.Revision}）";
         }
 
         /// <summary>Enters the busy (launching) state.</summary>

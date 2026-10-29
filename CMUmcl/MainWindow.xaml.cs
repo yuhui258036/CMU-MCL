@@ -20,6 +20,7 @@ namespace CMUmcl
         private readonly InstalledStateStore _installedState;
         private readonly LaunchService _launchService;
         private readonly SettingsStore _settingsStore;
+        private readonly LocalInstanceService _localInstanceService;
 
         private AuthSession _session;
         private AppSettings _settings;
@@ -45,7 +46,8 @@ namespace CMUmcl
             PackInstaller installer,
             InstalledStateStore installedState,
             LaunchService launchService,
-            SettingsStore settingsStore)
+            SettingsStore settingsStore,
+            LocalInstanceService localInstanceService)
         {
             InitializeComponent();
 
@@ -56,6 +58,7 @@ namespace CMUmcl
             _installedState = installedState;
             _launchService = launchService;
             _settingsStore = settingsStore;
+            _localInstanceService = localInstanceService;
 
             AccountNameText.Text = session.SelectedProfileName;
             CardsList.ItemsSource = _cards;
@@ -74,6 +77,20 @@ namespace CMUmcl
         {
             if (_loading) return;
             await LoadManifestAsync();
+        }
+
+        private async void NewInstanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new CreateInstanceWindow(_localInstanceService)
+            {
+                Owner = this,
+            };
+
+            bool? ok = dialog.ShowDialog();
+            if (ok == true && dialog.Result != null)
+            {
+                await LoadManifestAsync();
+            }
         }
 
         private async Task LoadManifestAsync()
@@ -104,6 +121,8 @@ namespace CMUmcl
                     string? displayName = _installedState.GetDisplayName(instance.Id);
                     _cards.Add(new PackCardViewModel(instance, installedRevision, displayName));
                 }
+
+                AddLocalCards();
 
                 ShowCards();
             }
@@ -137,6 +156,41 @@ namespace CMUmcl
                 vm.SetDisplayName(_installedState.GetDisplayName(vm.InstanceId));
         }
 
+        /// <summary>Adds locally-created instances (ids starting with <c>local:</c>) to the card list.</summary>
+        private void AddLocalCards()
+        {
+            foreach (var kv in _installedState.ListRecords())
+            {
+                if (!kv.Key.StartsWith("local:", StringComparison.Ordinal))
+                    continue;
+
+                string id = kv.Key;
+                string installPath = _installedState.GetInstallPath(id);
+                string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, installPath);
+                string metaPath = Path.Combine(instanceDir, "instance.json");
+
+                InstanceMetadata? metadata = null;
+                if (File.Exists(metaPath))
+                {
+                    try
+                    {
+                        metadata = System.Text.Json.JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaPath));
+                    }
+                    catch
+                    {
+                        metadata = null;
+                    }
+                }
+
+                // A local instance cannot launch without its metadata; skip broken records.
+                if (metadata == null)
+                    continue;
+
+                string displayName = kv.Value.DisplayName ?? metadata.Name ?? id;
+                _cards.Add(new PackCardViewModel(id, metadata, displayName));
+            }
+        }
+
         /// <summary>Dispatches the card button action: launch if installed/current, otherwise install/update.</summary>
         private async Task HandleCardActionAsync(PackCardViewModel vm)
         {
@@ -158,7 +212,7 @@ namespace CMUmcl
 
             try
             {
-                await _installer.InstallAsync(vm.Instance, progress);
+                await _installer.InstallAsync(vm.Instance!, progress);
                 vm.Complete();
             }
             catch (ResourceException ex)
@@ -183,7 +237,9 @@ namespace CMUmcl
 
             try
             {
-                LaunchResult result = await _launchService.LaunchAsync(vm.Instance, _session, progress);
+                LaunchResult result = vm.IsLocal
+                    ? await _launchService.LaunchLocalAsync(vm.InstanceId, _session, progress)
+                    : await _launchService.LaunchAsync(vm.Instance!, _session, progress);
 
                 // The session may have been refreshed during launch.
                 _session = result.Session;
@@ -240,6 +296,7 @@ namespace CMUmcl
             HeaderTitleText.Text = "设置";
             HeaderStatusText.Text = string.Empty;
             RefreshButton.Visibility = Visibility.Collapsed;
+            NewInstanceButton.Visibility = Visibility.Collapsed;
 
             SettingsScroll.Visibility = Visibility.Visible;
             CardsScroll.Visibility = Visibility.Collapsed;
@@ -261,6 +318,7 @@ namespace CMUmcl
             HeaderTitleText.Text = "服务器整合包";
             HeaderStatusText.Text = _headerStatusText;
             RefreshButton.Visibility = Visibility.Visible;
+            NewInstanceButton.Visibility = Visibility.Visible;
 
             SettingsScroll.Visibility = Visibility.Collapsed;
             NoLaunchNote.Visibility = Visibility.Visible;

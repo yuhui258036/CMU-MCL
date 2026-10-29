@@ -63,8 +63,33 @@ namespace CMUmcl.Launch
             if (installedRevision == null || installedRevision.Value < instance.Revision)
                 throw new LaunchException("请先安装 / 更新该整合包再启动。");
 
-            // 2. Read instance.json from the recorded install path (fallback to the id).
-            string installPath = _installedState.GetInstallPath(instance.Id);
+            (string instanceDir, InstanceMetadata metadata) = await ReadInstanceMetadataAsync(instance.Id, ct).ConfigureAwait(false);
+            return await LaunchCoreAsync(instanceDir, metadata, session, progress, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Launches a locally-created instance (no manifest entry) by reading its instance.json and
+        /// installing the base game/loader exactly like a server pack. Skips the manifest revision check.
+        /// </summary>
+        public async Task<LaunchResult> LaunchLocalAsync(
+            string instanceId,
+            AuthSession session,
+            IProgress<LaunchProgress>? progress = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(instanceId)) throw new ArgumentNullException(nameof(instanceId));
+            if (session == null) throw new ArgumentNullException(nameof(session));
+
+            (string instanceDir, InstanceMetadata metadata) = await ReadInstanceMetadataAsync(instanceId, ct).ConfigureAwait(false);
+            return await LaunchCoreAsync(instanceDir, metadata, session, progress, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Reads instance.json from the recorded install path (fallback to the id) for an instance.</summary>
+        private async Task<(string InstanceDir, InstanceMetadata Metadata)> ReadInstanceMetadataAsync(
+            string instanceId,
+            CancellationToken ct)
+        {
+            string installPath = _installedState.GetInstallPath(instanceId);
             string instanceDir = Path.Combine(LauncherPaths.InstancesDirectory, installPath);
             string instanceJsonPath = Path.Combine(instanceDir, "instance.json");
             if (!File.Exists(instanceJsonPath))
@@ -82,6 +107,17 @@ namespace CMUmcl.Launch
                 throw new LaunchException("实例信息格式无效，请重新安装该整合包。");
             }
 
+            return (instanceDir, metadata);
+        }
+
+        /// <summary>Shared launch path: install base game + loader, then start the process.</summary>
+        private async Task<LaunchResult> LaunchCoreAsync(
+            string instanceDir,
+            InstanceMetadata metadata,
+            AuthSession session,
+            IProgress<LaunchProgress>? progress,
+            CancellationToken ct)
+        {
             string gameVersion = metadata.Game ?? string.Empty;
             string loader = metadata.Loader ?? string.Empty;
             string loaderVersion = metadata.LoaderVersion ?? string.Empty;

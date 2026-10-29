@@ -1,0 +1,69 @@
+<Window x:Class="CMUmcl.CreateInstanceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新建本地实例"
+        Width="420" Height="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}"
+        FontFamily="Segoe UI, Microsoft YaHei UI">
+    <Window.Resources>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="新建本地实例" FontSize="18" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrush}" Margin="0,0,0,16" />
+
+        <!-- Name -->
+        <TextBlock Grid.Row="1" Text="实例名称" Style="{StaticResource Label}" />
+        <TextBox x:Name="NameBox" Grid.Row="2" Height="36" Margin="0,0,0,12" />
+
+        <!-- Game version -->
+        <TextBlock Grid.Row="3" Text="Minecraft 游戏版本" Style="{StaticResource Label}" />
+        <TextBox x:Name="GameVersionBox" Grid.Row="4" Height="36" Margin="0,0,0,12" />
+
+        <!-- Loader -->
+        <TextBlock Grid.Row="5" Text="加载器" Style="{StaticResource Label}" />
+        <ComboBox x:Name="LoaderCombo" Grid.Row="6" Height="36" Margin="0,0,0,12"
+                  HorizontalAlignment="Stretch" SelectionChanged="LoaderCombo_SelectionChanged" />
+
+        <!-- Loader version -->
+        <TextBlock Grid.Row="7" Text="加载器版本" Style="{StaticResource Label}" />
+        <TextBox x:Name="LoaderVersionBox" Grid.Row="8" Height="36" Margin="0,0,0,4" />
+        <TextBlock Grid.Row="9" Text="Fabric / Quilt 可留空（自动选择默认版本）；Forge / NeoForge 必填。" FontSize="11"
+                   Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,8" TextWrapping="Wrap" />
+
+        <!-- Error -->
+        <TextBlock x:Name="ErrorText" Grid.Row="10" Text="" Foreground="{StaticResource ErrorBrush}"
+                   FontSize="13" TextWrapping="Wrap" VerticalAlignment="Bottom" MinHeight="18" Margin="0,8,0,8" />
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Content="取消" Width="96" Height="34" Margin="0,0,10,0"
+                    Click="CancelButton_Click" />
+            <Button x:Name="CreateButton" Content="创建" Width="96" Height="34"
+                    Style="{StaticResource PrimaryButton}" Click="CreateButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

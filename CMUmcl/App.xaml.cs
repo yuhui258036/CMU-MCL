@@ -15,6 +15,7 @@ namespace CMUmcl
         private InstalledStateStore? _installedState;
         private SettingsStore? _settingsStore;
         private LaunchService? _launchService;
+        private LocalInstanceService? _localInstanceService;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -31,6 +32,7 @@ namespace CMUmcl
             _installedState = new InstalledStateStore();
             _installer = new PackInstaller(_installedState);
             _launchService = new LaunchService(_client, _store, _installedState, _settingsStore);
+            _localInstanceService = new LocalInstanceService(_installedState);
 
             AuthSession? session = TryRestoreSession();
             if (session == null)
@@ -122,7 +124,7 @@ namespace CMUmcl
         /// <summary>Shows the main window; on logout, returns to the login gate.</summary>
         private void ShowMainWindow(AuthSession session)
         {
-            var main = new MainWindow(session, _store!, _manifestClient!, _installer!, _installedState!, _launchService!, _settingsStore!);
+            var main = new MainWindow(session, _store!, _manifestClient!, _installer!, _installedState!, _launchService!, _settingsStore!, _localInstanceService!);
             bool loggingOut = false;
 
             main.LogoutRequested += () => loggingOut = true;
