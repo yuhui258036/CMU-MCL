@@ -22,8 +22,9 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
   - [x] **5.3 Quilt**：1.21.1 + 0.20.0-beta.9，使用 CmlLib.Core 内置 QuiltInstaller；安装、依赖下载、主菜单启动通过。
 - [ ] **6. 设置与更新**：Java/内存/目录设置、启动前强制更新、发布自动化
   - [x] **6.1 设置页**：主窗口内页面；Java 自动/手动、最大内存、版本隔离、根目录打开；待用户验收。
-  - [x] **6.1.5 自定义实例创建**：新建实例窗口（名称/MC 版本选择/加载器/加载器版本选择/Fabric API）；本地 `local:{uuid}` ID、独立目录/显示名、冲突自动后缀；本地实例卡片可启动；命名测试 16/16 PASS；待用户验收。
+  - [x] **6.1.5 自定义实例创建**：新建实例窗口（名称/MC 版本选择/加载器/加载器版本选择/Fabric API）；本地 `local:{uuid}` ID、独立目录/显示名、冲突自动后缀；创建时下载 Minecraft/加载器文件；Forge/NeoForge 版本列表已接入；命名测试 16/16 PASS；待用户验收。
   - [x] **6.1.6 三页布局**：服务器整合包（仅下载/更新）/ 实例（统一启动、新建实例、打开目录）/ 设置；待用户验收。
+  - [ ] **6.1.7 UI 现代化**：三页导航/卡片、创建实例窗口按 YSUMCL 风格重做（图标/分区/加载器 chips/下载摘要）。
   - [x] **6.2 实例存放位置**：可配置实例根目录；迁移已有实例；目标冲突自动加 `-2` / ` (2)` 后缀；临时迁移测试 29/29 PASS；待用户验收。
   - [ ] **6.3 启动前自动更新整合包**：设置已保存，行为尚未接入。
   - [ ] **6.5 客户端自动更新**：检查 GitHub Release/更新清单，下载并替换自包含版本（参考 PCL / YSUMCL 的 updater）
@@ -37,7 +38,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
-| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：29/29 PASS；LocalInstanceNaming：16/16 PASS；VersionCatalog/FabricApi：103 MC releases、255 Fabric loaders、307 Quilt loaders，Fabric API 下载校验通过 |
+| 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：29/29 PASS；LocalInstanceNaming：16/16 PASS；VersionCatalog/FabricApi：103 MC releases、255 Fabric loaders、307 Quilt loaders，Fabric API 下载校验通过；Forge 1.20.1 137 个/1.21.1 69 个版本；NeoForge 映射通过；临时实例创建时原版下载 provision 通过 |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
 | 自动 Java | `java-runtime-epsilon` / Java 25.0.1，约 100.2MB，411 files，`.complete` 正常 |
 | 数据目录 | `%LOCALAPPDATA%\CMUmcl` → junction → `D:\新启动器\CMUmclData` |
@@ -71,9 +72,9 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - 自动下载已加 3 次重试（仅临时网络 / 408 / 429 / 5xx，间隔 1s/2s）；若代理持续不稳定仍可能失败。
 - 已知加载器已全部支持：原版 / Fabric / Forge / NeoForge / Quilt。
 - 设置页和实例迁移、自定义实例创建已完成，等待用户界面验收；启动前自动更新整合包、启动器自动更新尚未接入。
-- 自定义实例创建时只下载 Fabric API（若勾选）；Minecraft/加载器文件仍在首次启动时下载。
-- Forge/NeoForge 加载器版本目前手动输入，尚未接入版本列表。
-- 实例迁移冲突目前自动加后缀，不做逐项手动改名；需要手动改名时再补冲突编辑对话框。
+- 自定义实例创建时会下载 Minecraft 与加载器文件；取消或失败时实例保留，首次启动会自动重试。
+- Forge/NeoForge 版本列表已接入 Maven；NeoForge 源站在当前网络不可达时回退手动输入。
+- 实例迁移冲突目前自动加后缀；逐项手动改名对话框待补。
 - 本地实例暂无删除/修复入口；清单获取失败时本地卡片也随主页面一起不可见。
 - `CSUxYSU union server` 的服务器地址目前为空，需要后台补上。
 - 服务端 manifest 私钥仍在服务器上；后续可评估离线签名。

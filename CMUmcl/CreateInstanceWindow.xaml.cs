@@ -6,18 +6,19 @@ using System.Windows;
 using System.Windows.Controls;
 
 using CMUmcl.Content;
+using CMUmcl.Launch;
 
 namespace CMUmcl
 {
     /// <summary>
     /// Dialog for creating a local (non-manifest) instance. Loads Minecraft / loader version
-    /// lists on open (falling back to manual input when offline) and, optionally, downloads the
-    /// Fabric API mod after the instance metadata is written. Base game/loader files are never
-    /// downloaded here — they are fetched on first launch.
+    /// lists on open (falling back to manual input when offline), provisions the base game and
+    /// loader files at create time, and optionally downloads the Fabric API mod afterward.
     /// </summary>
     public partial class CreateInstanceWindow : Window
     {
         private readonly LocalInstanceService _service;
+        private readonly LaunchService _launchService;
         private readonly VersionCatalogService _catalog;
         private readonly FabricApiInstaller _fabricApi;
         private readonly CancellationTokenSource _cts = new();
@@ -28,10 +29,11 @@ namespace CMUmcl
         private bool _creating;
         private int _loaderVersionLoadToken;
 
-        public CreateInstanceWindow(LocalInstanceService service)
+        public CreateInstanceWindow(LocalInstanceService service, LaunchService launchService)
         {
             InitializeComponent();
             _service = service ?? throw new ArgumentNullException(nameof(service));
+            _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
             _catalog = new VersionCatalogService();
             _fabricApi = new FabricApiInstaller();
 
@@ -68,7 +70,7 @@ namespace CMUmcl
                         GameVersionCombo.Items.Add(version);
 
                     GameVersionCombo.SelectedIndex = 0; // Releases are newest-first.
-                    SetStatus($"已加载 {versions.Count} 个 Minecraft 版本。首次启动会自动下载 Minecraft 与加载器文件。");
+                    SetStatus($"已加载 {versions.Count} 个 Minecraft 版本。");
                 }
                 else
                 {
@@ -106,7 +108,7 @@ namespace CMUmcl
             if (LoaderVersionCombo == null) return;
 
             ShowError(null);
-            if (SelectedLoader is "fabric" or "quilt")
+            if (SelectedLoader is not "vanilla")
                 _ = LoadLoaderVersionsAsync();
         }
 
@@ -122,20 +124,22 @@ namespace CMUmcl
             string loader = SelectedLoader;
 
             bool isFabricLike = loader is "fabric" or "quilt";
-            bool needsVersion = loader is "fabric" or "forge" or "neoforge" or "quilt";
+            bool isVanilla = loader == "vanilla";
 
-            LoaderVersionCombo.IsEnabled = needsVersion;
+            LoaderVersionCombo.IsEnabled = !isVanilla;
             FabricApiCheck.Visibility = isFabricLike ? Visibility.Visible : Visibility.Collapsed;
 
             if (!isFabricLike)
-            {
                 FabricApiCheck.IsChecked = false;
+
+            if (isVanilla)
+            {
                 LoaderVersionCombo.Items.Clear();
                 LoaderVersionCombo.Text = string.Empty;
+                return;
             }
 
-            if (isFabricLike)
-                _ = LoadLoaderVersionsAsync();
+            _ = LoadLoaderVersionsAsync();
         }
 
         private async Task LoadLoaderVersionsAsync()
@@ -144,7 +148,7 @@ namespace CMUmcl
             string gameVersion = CurrentGameVersion;
             int token = ++_loaderVersionLoadToken;
 
-            if (loader is not ("fabric" or "quilt"))
+            if (loader is not ("fabric" or "quilt" or "forge" or "neoforge"))
             {
                 LoaderVersionCombo.Items.Clear();
                 return;
@@ -160,14 +164,19 @@ namespace CMUmcl
             string previous = CurrentLoaderVersion;
             SetStatus($"正在加载 {LoaderDisplay(loader)} 版本…");
 
-            IReadOnlyList<string> versions = loader == "fabric"
-                ? await _catalog.GetFabricLoaderVersionsAsync(gameVersion, _cts.Token)
-                : await _catalog.GetQuiltLoaderVersionsAsync(gameVersion, _cts.Token);
+            IReadOnlyList<string> versions = loader switch
+            {
+                "fabric" => await _catalog.GetFabricLoaderVersionsAsync(gameVersion, _cts.Token),
+                "quilt" => await _catalog.GetQuiltLoaderVersionsAsync(gameVersion, _cts.Token),
+                "forge" => await _catalog.GetForgeLoaderVersionsAsync(gameVersion, _cts.Token),
+                "neoforge" => await _catalog.GetNeoForgeLoaderVersionsAsync(gameVersion, _cts.Token),
+                _ => Array.Empty<string>(),
+            };
 
             if (token != _loaderVersionLoadToken)
                 return; // A newer load superseded this one.
 
-            if (SelectedLoader is not ("fabric" or "quilt"))
+            if (SelectedLoader is not ("fabric" or "quilt" or "forge" or "neoforge"))
                 return; // The user switched loader while we were fetching.
 
             LoaderVersionCombo.Items.Clear();
@@ -184,11 +193,21 @@ namespace CMUmcl
             else
             {
                 LoaderVersionCombo.Text = previous;
-                SetStatus($"无法加载 {LoaderDisplay(loader)} 版本，可手动输入或留空（自动选择默认版本）。");
+                string hint = loader is "forge" or "neoforge"
+                    ? $"无法加载 {LoaderDisplay(loader)} 版本，可手动输入版本。"
+                    : $"无法加载 {LoaderDisplay(loader)} 版本，可手动输入或留空（自动选择默认版本）。";
+                SetStatus(hint);
             }
         }
 
-        private static string LoaderDisplay(string loader) => loader == "fabric" ? "Fabric" : "Quilt";
+        private static string LoaderDisplay(string loader) => loader switch
+        {
+            "fabric" => "Fabric",
+            "quilt" => "Quilt",
+            "forge" => "Forge",
+            "neoforge" => "NeoForge",
+            _ => loader,
+        };
 
         private static int IndexOfVersion(IReadOnlyList<string> versions, string value)
         {
@@ -265,7 +284,18 @@ namespace CMUmcl
                 return;
             }
 
-            // The instance is created; downloading the base game/loader happens on first launch.
+            // Provision the base game + loader files at create time. The instance is already
+            // created and recorded, so any failure here must not delete it — warn and close.
+            bool provisioned = await ProvisionAsync();
+            if (!provisioned)
+            {
+                // On cancellation the window is already closing. On failure a warning was shown
+                // and the instance is kept; close so the instance appears in the list.
+                if (!_cts.IsCancellationRequested)
+                    DialogResult = true;
+                return;
+            }
+
             if (installFabricApi)
             {
                 var progress = new Progress<FabricApiProgress>(p =>
@@ -285,7 +315,7 @@ namespace CMUmcl
 
                 if (apiResult.Success)
                 {
-                    SetStatus("Fabric API 已安装。首次启动会自动下载 Minecraft 与加载器文件。");
+                    SetStatus("实例已创建，Fabric API 已安装。");
                 }
                 else
                 {
@@ -295,15 +325,93 @@ namespace CMUmcl
                         "Fabric API 下载失败",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
-                    SetStatus("实例已创建，但 Fabric API 下载失败。首次启动会自动下载 Minecraft 与加载器文件。");
+                    SetStatus("实例已创建，但 Fabric API 下载失败。");
                 }
             }
             else
             {
-                SetStatus("实例已创建。首次启动会自动下载 Minecraft 与加载器文件。");
+                SetStatus("实例已创建。");
             }
 
             DialogResult = true;
+        }
+
+        /// <summary>
+        /// Provisions the instance by downloading Minecraft + loader files. Returns true on
+        /// success. On failure the instance is kept and a warning is shown (the first launch
+        /// retries the download); returns false so the dialog closes without success.
+        /// </summary>
+        private async Task<bool> ProvisionAsync()
+        {
+            var progress = new Progress<LaunchProgress>(ReportProvisionProgress);
+
+            var manifest = new ManifestInstance
+            {
+                Id = Result!.Id,
+                Name = Result.DisplayName,
+                Revision = 1,
+            };
+
+            try
+            {
+                SetStatus("正在下载 Minecraft 与加载器文件…");
+                ProvisionBar.Visibility = Visibility.Visible;
+                ProvisionBar.IsIndeterminate = true;
+
+                string versionName = await _launchService.PrepareInstanceAsync(manifest, progress, _cts.Token);
+                return true;
+            }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+            {
+                // Window closed while provisioning; the instance is already created and recorded.
+                return false;
+            }
+            catch (LaunchException ex)
+            {
+                MessageBox.Show(
+                    this,
+                    $"实例已创建，但下载 Minecraft / 加载器文件失败：{ex.Message}\n\n首次启动时会自动重试下载。",
+                    "下载失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                SetStatus("实例已创建，但下载 Minecraft / 加载器文件失败。首次启动时会自动重试。");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    $"实例已创建，但下载 Minecraft / 加载器文件时发生了未知错误：{ex.Message}\n\n首次启动时会自动重试下载。",
+                    "下载失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                SetStatus("实例已创建，但下载 Minecraft / 加载器文件时发生了未知错误。首次启动时会自动重试。");
+                return false;
+            }
+        }
+
+        private void ReportProvisionProgress(LaunchProgress p)
+        {
+            string text = string.IsNullOrWhiteSpace(p.Stage) ? p.Message : $"{p.Stage}：{p.Message}";
+
+            if (p.TotalTasks > 0)
+            {
+                ProvisionBar.IsIndeterminate = false;
+                ProvisionBar.Maximum = p.TotalTasks;
+                ProvisionBar.Value = p.ProgressedTasks;
+            }
+            else if (p.TotalBytes > 0)
+            {
+                ProvisionBar.IsIndeterminate = false;
+                ProvisionBar.Maximum = p.TotalBytes;
+                ProvisionBar.Value = p.ProgressedBytes;
+            }
+            else
+            {
+                ProvisionBar.IsIndeterminate = true;
+            }
+
+            SetStatus(text);
         }
 
         private void ResetCreatingUi()

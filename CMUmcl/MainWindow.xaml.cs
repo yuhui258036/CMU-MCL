@@ -187,7 +187,7 @@ namespace CMUmcl
 
         private void NewInstanceButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new CreateInstanceWindow(_localInstanceService)
+            var dialog = new CreateInstanceWindow(_localInstanceService, _launchService)
             {
                 Owner = this,
             };

@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="新建本地实例"
-        Width="440" Height="600"
+        Width="440" Height="620"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -18,6 +18,7 @@
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -68,18 +69,20 @@
         <!-- Status / progress -->
         <TextBlock x:Name="StatusText" Grid.Row="11" Text="" Foreground="{StaticResource MutedTextBrush}"
                    FontSize="12" TextWrapping="Wrap" MinHeight="16" Margin="0,0,0,4" />
+        <ProgressBar x:Name="ProvisionBar" Grid.Row="12" Height="6" Margin="0,0,0,4"
+                     Minimum="0" Maximum="100" Visibility="Collapsed" />
 
         <!-- Error -->
-        <TextBlock x:Name="ErrorText" Grid.Row="12" Text="" Foreground="{StaticResource ErrorBrush}"
+        <TextBlock x:Name="ErrorText" Grid.Row="13" Text="" Foreground="{StaticResource ErrorBrush}"
                    FontSize="13" TextWrapping="Wrap" MinHeight="18" Margin="0,4,0,4" />
 
-        <!-- First-launch note -->
-        <TextBlock Grid.Row="13" Text="提示：首次启动会自动下载 Minecraft 与加载器文件。"
+        <!-- Provisioning note -->
+        <TextBlock Grid.Row="14" Text="提示：创建时会自动下载 Minecraft 与加载器文件；下载失败时首次启动会自动重试。"
                    FontSize="11" Foreground="{StaticResource MutedTextBrush}"
                    TextWrapping="Wrap" Margin="0,8,0,8" />
 
         <!-- Buttons -->
-        <StackPanel Grid.Row="14" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="15" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="CancelButton" Content="取消" Width="96" Height="34" Margin="0,0,10,0"
                     Click="CancelButton_Click" />
             <Button x:Name="CreateButton" Content="创建" Width="96" Height="34"

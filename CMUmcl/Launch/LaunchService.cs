@@ -84,6 +84,26 @@ namespace CMUmcl.Launch
             return await LaunchCoreAsync(instanceDir, metadata, session, progress, ct).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Install-only path: installs the base Minecraft version plus the loader for an instance
+        /// without validating a session or starting the game process. Used by create-time
+        /// provisioning. Reads instance.json (via <see cref="ReadInstanceMetadataAsync"/>) and
+        /// returns the resolved version name; throws a clear <see cref="LaunchException"/> on failure.
+        /// For a local custom instance the caller passes a synthetic <see cref="ManifestInstance"/>
+        /// with <c>Id</c> = local id and <c>Revision</c> = 1.
+        /// </summary>
+        public async Task<string> PrepareInstanceAsync(
+            ManifestInstance instance,
+            IProgress<LaunchProgress>? progress = null,
+            CancellationToken ct = default)
+        {
+            if (instance == null) throw new ArgumentNullException(nameof(instance));
+
+            (string instanceDir, InstanceMetadata metadata) = await ReadInstanceMetadataAsync(instance.Id, ct).ConfigureAwait(false);
+            PreparedInstall prepared = await PrepareCoreAsync(instanceDir, metadata, progress, ct).ConfigureAwait(false);
+            return prepared.VersionName;
+        }
+
         /// <summary>Reads instance.json from the recorded install path (fallback to the id) for an instance.</summary>
         private async Task<(string InstanceDir, InstanceMetadata Metadata)> ReadInstanceMetadataAsync(
             string instanceId,
@@ -110,11 +130,78 @@ namespace CMUmcl.Launch
             return (instanceDir, metadata);
         }
 
-        /// <summary>Shared launch path: install base game + loader, then start the process.</summary>
+        /// <summary>Shared launch path: validate session + prepare authlib, install base + loader, then start the process.</summary>
         private async Task<LaunchResult> LaunchCoreAsync(
             string instanceDir,
             InstanceMetadata metadata,
             AuthSession session,
+            IProgress<LaunchProgress>? progress,
+            CancellationToken ct)
+        {
+            // Validate/refresh the session before launching.
+            session = await EnsureValidSessionAsync(session, progress, ct).ConfigureAwait(false);
+
+            // Prepare authlib-injector.
+            progress?.Report(new LaunchProgress { Stage = "准备", Message = "正在准备 authlib-injector…" });
+            string authlibJar = EnsureAuthlibInjector();
+
+            PreparedInstall prepared = await PrepareCoreAsync(instanceDir, metadata, progress, ct).ConfigureAwait(false);
+
+            // Build MSession.
+            var mSession = new MSession(session.SelectedProfileName, session.AccessToken, session.SelectedProfileId);
+
+            // Build MLaunchOption.
+            string gameDir = ResolveGameDirectory(prepared.Settings, instanceDir, prepared.Loader);
+            Directory.CreateDirectory(gameDir);
+
+            var option = new MLaunchOption
+            {
+                Session = mSession,
+                Path = prepared.Launcher.MinecraftPath,
+                JavaPath = prepared.Java.JavaPath,
+                MaximumRamMb = Math.Max(512, prepared.Settings.MaxMemoryMb),
+                MinimumRamMb = 512,
+                GameLauncherName = "CMUmcl",
+                GameLauncherVersion = "0.1.0",
+                ArgumentDictionary = new Dictionary<string, string>
+                {
+                    ["game_directory"] = gameDir,
+                },
+            };
+
+            option.ExtraJvmArguments = MLaunchOption.DefaultExtraJvmArguments
+                .Append(new MArgument($"-javaagent:{authlibJar}={YggdrasilClient.ApiRoot}"));
+
+            // Quick play only when the server is not a local/loopback placeholder.
+            string serverAddress = metadata.ServerAddress ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(serverAddress)
+                && !string.Equals(serverAddress, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(serverAddress, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                option.ServerIp = serverAddress;
+                option.ServerPort = metadata.ServerPort;
+            }
+
+            // Build and start the process.
+            progress?.Report(new LaunchProgress { Stage = "启动", Message = "正在构建启动进程…" });
+            Process process = await prepared.Launcher.BuildProcessAsync(prepared.VersionName, option, ct).ConfigureAwait(false);
+
+            process.Start();
+
+            progress?.Report(new LaunchProgress { Stage = "已启动", Message = "游戏已启动。" });
+
+            return new LaunchResult
+            {
+                Process = process,
+                Session = session,
+                VersionName = prepared.VersionName,
+            };
+        }
+
+        /// <summary>Shared install path: load settings, install vanilla, select Java, install the loader. No session/process.</summary>
+        private async Task<PreparedInstall> PrepareCoreAsync(
+            string instanceDir,
+            InstanceMetadata metadata,
             IProgress<LaunchProgress>? progress,
             CancellationToken ct)
         {
@@ -125,21 +212,13 @@ namespace CMUmcl.Launch
             if (string.IsNullOrWhiteSpace(gameVersion))
                 throw new LaunchException("实例缺少 Minecraft 版本信息。");
 
-            // 2.5 Load the current user settings (Java path, memory, version isolation).
             AppSettings settings = _settingsStore.Load();
 
-            // 3. Validate/refresh the session before launching.
-            session = await EnsureValidSessionAsync(session, progress, ct).ConfigureAwait(false);
-
-            // 4. Prepare authlib-injector.
-            progress?.Report(new LaunchProgress { Stage = "准备", Message = "正在准备 authlib-injector…" });
-            string authlibJar = EnsureAuthlibInjector();
-
-            // 6. Build shared Minecraft path + launcher.
+            // Build shared Minecraft path + launcher.
             var minecraftPath = new MinecraftPath(LauncherPaths.MinecraftDirectory);
             var launcher = new MinecraftLauncher(minecraftPath);
 
-            // 7. Install vanilla.
+            // Install vanilla.
             progress?.Report(new LaunchProgress { Stage = "安装原版", Message = $"正在安装 Minecraft {gameVersion}…" });
             await launcher.InstallAsync(
                 gameVersion,
@@ -147,9 +226,32 @@ namespace CMUmcl.Launch
                 CreateByteProgress("安装原版", progress),
                 ct).ConfigureAwait(false);
 
-            // 7.5 Select a compatible Java runtime (before loader resolution so Forge
-            // processors can run). Manual path is validated first; otherwise auto-select
-            // or auto-download.
+            // Select a compatible Java runtime before loader resolution so Forge/NeoForge
+            // processors can run.
+            JavaInfo java = await SelectJavaAsync(gameVersion, settings, progress, ct).ConfigureAwait(false);
+
+            string versionName = await InstallLoaderAsync(gameVersion, loader, loaderVersion, java, launcher, progress, ct).ConfigureAwait(false);
+
+            return new PreparedInstall
+            {
+                VersionName = versionName,
+                Java = java,
+                Launcher = launcher,
+                Settings = settings,
+                Loader = loader,
+            };
+        }
+
+        /// <summary>
+        /// Selects a compatible Java runtime: validates a manually configured path first,
+        /// otherwise auto-selects from local JDKs or auto-downloads the Mojang runtime.
+        /// </summary>
+        private static async Task<JavaInfo> SelectJavaAsync(
+            string gameVersion,
+            AppSettings settings,
+            IProgress<LaunchProgress>? progress,
+            CancellationToken ct)
+        {
             JavaRequirement requirement = JavaVersionResolver.ResolveRequirement(gameVersion, LauncherPaths.MinecraftDirectory);
 
             JavaInfo? java;
@@ -188,13 +290,25 @@ namespace CMUmcl.Launch
 
             progress?.Report(new LaunchProgress
             {
-                Stage = "启动",
+                Stage = "准备",
                 Message = $"已选择 Java {java.Major}（{java.JavaPath}）",
                 JavaVersion = java.Major.ToString(),
                 JavaPath = java.JavaPath,
             });
 
-            // 8. Resolve loader.
+            return java;
+        }
+
+        /// <summary>Resolves and installs the loader, returning the resolved version id.</summary>
+        private async Task<string> InstallLoaderAsync(
+            string gameVersion,
+            string loader,
+            string loaderVersion,
+            JavaInfo java,
+            MinecraftLauncher launcher,
+            IProgress<LaunchProgress>? progress,
+            CancellationToken ct)
+        {
             string versionName;
             string normalizedLoader = loader.Trim().ToLowerInvariant();
             switch (normalizedLoader)
@@ -279,55 +393,17 @@ namespace CMUmcl.Launch
                     throw new LaunchException(UnsupportedLoaderMessage);
             }
 
-            // 9. Build MSession.
-            var mSession = new MSession(session.SelectedProfileName, session.AccessToken, session.SelectedProfileId);
+            return versionName;
+        }
 
-            // 10. Build MLaunchOption.
-            string gameDir = ResolveGameDirectory(settings, instanceDir, loader);
-            Directory.CreateDirectory(gameDir);
-
-            var option = new MLaunchOption
-            {
-                Session = mSession,
-                Path = launcher.MinecraftPath,
-                JavaPath = java.JavaPath,
-                MaximumRamMb = Math.Max(512, settings.MaxMemoryMb),
-                MinimumRamMb = 512,
-                GameLauncherName = "CMUmcl",
-                GameLauncherVersion = "0.1.0",
-                ArgumentDictionary = new Dictionary<string, string>
-                {
-                    ["game_directory"] = gameDir,
-                },
-            };
-
-            option.ExtraJvmArguments = MLaunchOption.DefaultExtraJvmArguments
-                .Append(new MArgument($"-javaagent:{authlibJar}={YggdrasilClient.ApiRoot}"));
-
-            // Quick play only when the server is not a local/loopback placeholder.
-            string serverAddress = metadata.ServerAddress ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(serverAddress)
-                && !string.Equals(serverAddress, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(serverAddress, "localhost", StringComparison.OrdinalIgnoreCase))
-            {
-                option.ServerIp = serverAddress;
-                option.ServerPort = metadata.ServerPort;
-            }
-
-            // 11. Build and start the process.
-            progress?.Report(new LaunchProgress { Stage = "启动", Message = "正在构建启动进程…" });
-            Process process = await launcher.BuildProcessAsync(versionName, option, ct).ConfigureAwait(false);
-
-            process.Start();
-
-            progress?.Report(new LaunchProgress { Stage = "已启动", Message = "游戏已启动。" });
-
-            return new LaunchResult
-            {
-                Process = process,
-                Session = session,
-                VersionName = versionName,
-            };
+        /// <summary>Carrier for the shared install path's outputs, consumed by both launch and provisioning.</summary>
+        private sealed class PreparedInstall
+        {
+            public string VersionName = string.Empty;
+            public JavaInfo Java = null!;
+            public MinecraftLauncher Launcher = null!;
+            public AppSettings Settings = null!;
+            public string Loader = string.Empty;
         }
 
         /// <summary>
