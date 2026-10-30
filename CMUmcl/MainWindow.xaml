@@ -10,6 +10,9 @@
         Background="{StaticResource BgBrush}"
         FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI"
         TextOptions.TextFormattingMode="Ideal"
+        AllowDrop="True"
+        PreviewDragOver="Window_PreviewDragOver"
+        Drop="Window_Drop"
         Loaded="Window_Loaded">
     <Window.Resources>
 

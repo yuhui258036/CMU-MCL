@@ -93,6 +93,7 @@ namespace CMUmcl
     public partial class CreateInstanceView : UserControl
     {
         private enum Step { Landing, Import, GameVersion, Loader, LoaderVersion, Progress, Success }
+        private enum ImportKind { None, Folder, Mrpack }
 
         private readonly ObservableCollection<LoaderCard> _loaderCards = new();
         private readonly ObservableCollection<GameVersionRow> _gameVersionRows = new();
@@ -105,7 +106,9 @@ namespace CMUmcl
         private CancellationTokenSource _cts = new();
 
         private readonly InstanceImportService _importService = new(new InstalledStateStore());
+        private MrpackImportService _mrpackImportService = null!;
         private string? _importSourcePath;
+        private ImportKind _importKind;
         private bool _importing;
 
         private readonly List<MinecraftVersionInfo> _gameVersions = new();
@@ -170,6 +173,7 @@ namespace CMUmcl
             DisposeServices();
             _catalog = new VersionCatalogService();
             _fabricApi = new FabricApiInstaller();
+            _mrpackImportService = new MrpackImportService(new InstalledStateStore());
             _cts.Dispose();
             _cts = new CancellationTokenSource();
 
@@ -192,8 +196,10 @@ namespace CMUmcl
         {
             try { _catalog?.Dispose(); } catch { /* best effort */ }
             try { _fabricApi?.Dispose(); } catch { /* best effort */ }
+            try { _mrpackImportService?.Dispose(); } catch { /* best effort */ }
             _catalog = null!;
             _fabricApi = null!;
+            _mrpackImportService = null!;
         }
 
         private void ResetState()
@@ -220,8 +226,9 @@ namespace CMUmcl
             CategoryCombo.SelectedIndex = 1;
 
             _importSourcePath = null;
+            _importKind = ImportKind.None;
             ImportNameBox.Text = string.Empty;
-            ImportPathText.Text = "尚未选择文件夹";
+            ImportPathText.Text = "尚未选择文件夹或 .mrpack 文件";
             ImportStatusText.Text = string.Empty;
             ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
             UpdateImportButton();
@@ -319,6 +326,7 @@ namespace CMUmcl
             if (string.IsNullOrWhiteSpace(folder))
                 return;
 
+            _importKind = ImportKind.Folder;
             _importSourcePath = folder;
             ImportPathText.Text = folder;
 
@@ -331,13 +339,90 @@ namespace CMUmcl
             UpdateImportButton();
         }
 
+        private void ImportChooseMrpackButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "选择 Modrinth 整合包",
+                Filter = "Modrinth 整合包 (*.mrpack)|*.mrpack",
+                CheckFileExists = true,
+            };
+
+            if (dialog.ShowDialog(Window.GetWindow(this)) != true)
+                return;
+
+            SelectMrpackFile(dialog.FileName);
+        }
+
+        /// <summary>
+        /// Preselects a local <c>.mrpack</c> file for import (used by the picker and by the main
+        /// window's drag-and-drop). Validates the extension, switches to the Import step, and shows
+        /// an inline error (without creating an instance) for invalid files.
+        /// </summary>
+        public void SelectMrpackFile(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                _importSourcePath = null;
+                _importKind = ImportKind.None;
+                ShowImportError("未选择 .mrpack 文件。");
+                return;
+            }
+
+            if (!File.Exists(path))
+            {
+                _importSourcePath = null;
+                _importKind = ImportKind.None;
+                ShowImportError("所选 .mrpack 文件不存在。");
+                ShowStep(Step.Import);
+                return;
+            }
+
+            if (!path.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase))
+            {
+                _importSourcePath = null;
+                _importKind = ImportKind.None;
+                ShowImportError("请选择 .mrpack 整合包文件。");
+                ShowStep(Step.Import);
+                return;
+            }
+
+            _importKind = ImportKind.Mrpack;
+            _importSourcePath = path;
+            ImportPathText.Text = path;
+
+            string stem = Path.GetFileNameWithoutExtension(path);
+            if (!string.IsNullOrWhiteSpace(stem))
+                ImportNameBox.Text = stem;
+
+            ImportStatusText.Text = string.Empty;
+            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            ShowStep(Step.Import);
+            UpdateImportButton();
+        }
+
         private async void ImportButton_Click(object sender, RoutedEventArgs e)
         {
             if (_importing)
                 return;
 
             string source = _importSourcePath ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(source) || !Directory.Exists(source))
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                ShowImportError("请先选择要导入的实例文件夹或 .mrpack 文件。");
+                return;
+            }
+
+            if (_importKind == ImportKind.Mrpack)
+                await RunMrpackImportAsync();
+            else
+                await RunFolderImportAsync();
+        }
+
+        private async Task RunFolderImportAsync()
+        {
+            string source = _importSourcePath ?? string.Empty;
+            if (!Directory.Exists(source))
             {
                 ShowImportError("请先选择有效的实例文件夹。");
                 return;
@@ -373,6 +458,40 @@ namespace CMUmcl
             }
         }
 
+        private async Task RunMrpackImportAsync()
+        {
+            string source = _importSourcePath ?? string.Empty;
+
+            _importing = true;
+            SetImportBusy(true);
+
+            string name = ImportNameBox.Text?.Trim() ?? string.Empty;
+            var progress = new Progress<ImportProgress>(ReportImportProgress);
+
+            try
+            {
+                await _mrpackImportService.ImportAsync(source, name, progress, _cts.Token);
+                InstanceCreated?.Invoke();
+            }
+            catch (InstanceImportException ex)
+            {
+                ShowImportError(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                // Leaving the view; the partial target was already rolled back by the service.
+            }
+            catch (Exception ex)
+            {
+                ShowImportError("导入 .mrpack 整合包时发生未知错误：" + ex.Message);
+            }
+            finally
+            {
+                _importing = false;
+                SetImportBusy(false);
+            }
+        }
+
         private void ReportImportProgress(ImportProgress p)
         {
             if (string.IsNullOrWhiteSpace(p.Message))
@@ -385,6 +504,7 @@ namespace CMUmcl
         private void SetImportBusy(bool busy)
         {
             ImportChooseButton.IsEnabled = !busy;
+            ImportChooseMrpackButton.IsEnabled = !busy;
             ImportNameBox.IsEnabled = !busy;
             ImportButton.Content = busy ? "正在导入…" : "导入";
             ImportButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_importSourcePath);

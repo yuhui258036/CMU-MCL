@@ -30,6 +30,7 @@ namespace CMUmcl
 
         private bool _loading;
         private bool _migrating;
+        private bool _handlingDrop;
 
         private enum MainPage { Packs, Instances, Settings }
         private enum PacksContentState { Loading, Cards, Empty, Error }
@@ -78,6 +79,57 @@ namespace CMUmcl
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             await LoadManifestAsync();
+        }
+
+        // ------------------------------------------------------------------
+        // Drag-and-drop (.mrpack import)
+        // ------------------------------------------------------------------
+
+        private void Window_PreviewDragOver(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            e.Effects = GetMrpackDropEffects(e.Data);
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+
+            if (_handlingDrop)
+                return;
+
+            string[] files = (e.Data.GetData(DataFormats.FileDrop) as string[]) ?? Array.Empty<string>();
+            if (files.Length == 1 && files[0].EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase))
+            {
+                _handlingDrop = true;
+                try
+                {
+                    CreateInstanceView.Open(_localInstanceService, _launchService);
+                    CreateInstanceView.SelectMrpackFile(files[0]);
+                    e.Effects = DragDropEffects.Copy;
+                    return;
+                }
+                finally
+                {
+                    _handlingDrop = false;
+                }
+            }
+
+            // Reject multiple files / non-mrpack drops without opening the flow.
+            e.Effects = DragDropEffects.None;
+            MessageBox.Show(this, "仅支持拖入单个 .mrpack 整合包文件。", "无法导入", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private static DragDropEffects GetMrpackDropEffects(IDataObject data)
+        {
+            if (!data.GetDataPresent(DataFormats.FileDrop))
+                return DragDropEffects.None;
+
+            string[] files = (data.GetData(DataFormats.FileDrop) as string[]) ?? Array.Empty<string>();
+            if (files.Length != 1 || !files[0].EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase))
+                return DragDropEffects.None;
+
+            return DragDropEffects.Copy;
         }
 
         // ------------------------------------------------------------------
