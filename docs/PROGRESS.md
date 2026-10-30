@@ -38,6 +38,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 | 分支 | `main` |
 | 本地提交 | 见 `git log -1` |
 | 远程 | `origin/main`，GitHub 私有仓库 `yuhui258036/CMU-MCL` |
+| 资源站 CDN | `https://csumcl.mcapcs.cn`（EdgeOne；manifest 签名验证通过，packs immutable 缓存 HIT） |
 | 构建 | `dotnet build` exit 0，0 errors（2 个既有 NU1510 警告） |
 | 测试 | JavaHarness：默认 55 PASS；自动下载模式 65 PASS；ForgeHarness：默认 66 PASS，`--install`/`--launch` 通过；NeoForge 包装器：安装/跳过/启动通过；Quilt：1.21.1 主菜单启动通过；SettingsMigrationTest：56/56 PASS；LocalInstanceNaming：16/16 PASS；ProvisioningMarker：22/22 PASS；PackAutoUpdate：8/8 PASS；IncrementalPackClient：8/8 组 PASS；AdminFileIndex：43/43 PASS；VersionCatalog：921 个版本（103 正式版 / 748 快照 / 9 愚人节 / 61 远古版本），Fabric 26.3 255 / Quilt 1.21.1 307 / NeoForge 26.3 95 / Forge 1.21.1 69 个加载器版本；本地代理 127.0.0.1:7890 验证通过；Fabric API 下载校验通过；创建流程已在应用中人工打开验证 |
 | 实际启动 | 26.3 + Fabric 0.19.5，使用 JDK 26，进入主菜单；无 Java 25+ 模块访问错误 |
