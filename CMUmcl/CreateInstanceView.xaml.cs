@@ -634,14 +634,10 @@ namespace CMUmcl
         {
             _selectedGameVersion = row;
 
-            string newDefault = row.Name;
-            string current = NameBox.Text?.Trim() ?? string.Empty;
-            if (current.Length == 0 || string.Equals(current, _defaultName, StringComparison.Ordinal))
-                NameBox.Text = newDefault;
-            _defaultName = newDefault;
-
-            // Loader selection resets whenever the game version changes.
+            // Reset the loader selection for the new game version, then regenerate the
+            // default instance name (game version + selected loader/version).
             SelectLoader("vanilla");
+            RefreshDefaultName();
         }
 
         // ------------------------------------------------------------------
@@ -673,6 +669,42 @@ namespace CMUmcl
             _selectedLoader = key;
             _selectedLoaderVersion = string.Empty;
             RefreshLoaderStepUi();
+            RefreshDefaultName();
+        }
+
+        /// <summary>
+        /// Builds the automatic instance name from the selected game, loader and loader version.
+        /// Vanilla uses only the game version; modded instances append the loader name and version.
+        /// </summary>
+        private string BuildDefaultInstanceName()
+        {
+            string game = _selectedGameVersion?.Name?.Trim() ?? string.Empty;
+            if (game.Length == 0)
+                return string.Empty;
+
+            if (_selectedLoader is "" or "vanilla")
+                return game;
+
+            string loader = LoaderDisplay(_selectedLoader);
+            string version = _selectedLoaderVersion?.Trim() ?? string.Empty;
+            return version.Length > 0 ? $"{game} {loader} {version}" : $"{game} {loader}";
+        }
+
+        /// <summary>
+        /// Updates the name box only while the user has not overridden the automatic name.
+        /// </summary>
+        private void RefreshDefaultName()
+        {
+            if (NameBox == null)
+                return;
+
+            string newDefault = BuildDefaultInstanceName();
+            string current = NameBox.Text?.Trim() ?? string.Empty;
+
+            if (current.Length == 0 || string.Equals(current, _defaultName, StringComparison.Ordinal))
+                NameBox.Text = newDefault;
+
+            _defaultName = newDefault;
         }
 
         private void RefreshLoaderStepUi()
@@ -821,6 +853,7 @@ namespace CMUmcl
             {
                 _selectedLoaderVersion = row.Version;
                 RefreshLoaderStepUi();
+                RefreshDefaultName();
                 ShowStep(Step.Loader);
             }
         }
