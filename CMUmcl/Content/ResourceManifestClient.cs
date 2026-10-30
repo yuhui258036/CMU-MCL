@@ -14,8 +14,9 @@ namespace CMUmcl.Content
     /// </summary>
     public sealed class ResourceManifestClient : IDisposable
     {
-        public const string BaseUrl = "https://103.24.216.15";
-        public const string AllowedPackHost = "103.24.216.15";
+        public const string BaseUrl = "https://csumcl.mcapcs.cn";
+        public const string AllowedPackHost = "csumcl.mcapcs.cn";
+        private const string LegacyAllowedPackHost = "103.24.216.15";
         private const string UserAgent = "CMUmcl/0.1.0";
         private const string SignatureAlgorithm = "ECDSA-P256-SHA256";
 
@@ -139,7 +140,8 @@ namespace CMUmcl.Content
                 return false;
             if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
                 return false;
-            return string.Equals(uri.Host, AllowedPackHost, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(uri.Host, AllowedPackHost, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(uri.Host, LegacyAllowedPackHost, StringComparison.OrdinalIgnoreCase);
         }
 
         public void Dispose() => _http.Dispose();
