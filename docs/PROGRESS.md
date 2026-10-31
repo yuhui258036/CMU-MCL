@@ -85,7 +85,7 @@ CMUmcl 已能登录、拉取签名整合包、安装、按 Minecraft 版本选�
 - 实例迁移冲突默认自动加后缀；迁移前可打开逐项手动改名对话框。
 - 创建流程目前只支持原版 / Fabric / Forge / NeoForge / Quilt；OptiFine、QSL/QFAPI 与“导入已有”暂未接入。
 - 创建实例图标使用 YSUMCL 素材，背景透明；Forge 使用去除白底后的 `Forge.png`。
-- 版本列表会自动探测本机代理（`CMUMCL_PROXY` 优先，其次系统代理，最后 127.0.0.1:7890/7891/1080）；若网络仍不可达，Fabric/Quilt/NeoForge 列表会为空而不是崩溃。
+- 代理已统一到“设置 → 代理”：默认使用系统代理，也可选择不使用代理、HTTP 或 SOCKS5；不再自动探测本机端口或使用 `CMUMCL_PROXY` 专用变量。详见 [PROXY-SETTINGS.md](PROXY-SETTINGS.md)。
 - 旧 `CreateInstanceWindow` 保留未调用，后续可删除；新的创建流程是主窗口内的 `CreateInstanceView`。
 - 加载器版本页目前显示兼容游戏版本/稳定/构建信息；Forge/NeoForge Maven 不提供发布时间，因此没有 HMCL 截图中的日期列。
 - 本地实例暂无删除/修复入口；清单获取失败时本地卡片也随主页面一起不可见。

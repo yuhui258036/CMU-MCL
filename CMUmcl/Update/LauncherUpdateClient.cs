@@ -11,7 +11,7 @@ public sealed class LauncherUpdateClient : IDisposable
 {
     private readonly HttpClient _http;
     private readonly string _verificationKey;
-    public LauncherUpdateClient() : this(new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+    public LauncherUpdateClient() : this(new HttpClient(CMUmcl.Network.LauncherProxy.CreateHandler(allowAutoRedirect: false))
         { Timeout = Timeout.InfiniteTimeSpan }, UpdateProtocol.PublicKey) { }
 
     // Test seam used by the separately built acceptance assembly.
@@ -42,32 +42,19 @@ public sealed class LauncherUpdateClient : IDisposable
         var stage = Path.Combine(Path.GetTempPath(), "CMUmcl-updates", Guid.NewGuid().ToString("N"));
         UpdateProtocol.EnsureFreeSpace(stage, release.Size);
         Directory.CreateDirectory(stage);
-        var partial = Path.Combine(stage, "package.partial");
+        var cacheRoot = Path.Combine(CMUmcl.Content.LauncherPaths.RootDirectory, "cache", "launcher-updates");
+        UpdateProtocol.EnsureFreeSpace(cacheRoot, release.Size);
+        Directory.CreateDirectory(cacheRoot);
+        var cachedArchive = Path.Combine(cacheRoot, release.Sha256.ToLowerInvariant() + ".zip");
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromMinutes(30));
-            using var response = await _http.GetAsync(release.Url, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            if ((int)response.StatusCode is >= 300 and < 400) throw new IOException("更新下载不允许重定向。");
-            if (response.Content.Headers.ContentLength is long length && length != release.Size)
-                throw new InvalidDataException("更新响应大小不匹配。");
-            await using (var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false))
-            await using (var output = File.Create(partial))
-            {
-                var buffer = new byte[128 * 1024];
-                long received = 0;
-                int read;
-                while ((read = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false)) > 0)
-                {
-                    received += read;
-                    if (received > release.Size) throw new InvalidDataException("更新下载超出声明大小。");
-                    await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token).ConfigureAwait(false);
-                    progress.Report(100.0 * received / release.Size);
-                }
-            }
-            await Task.Run(() => UpdateProtocol.VerifyArchive(partial, release, _verificationKey), ct).ConfigureAwait(false);
-            File.Move(partial, Path.Combine(stage, "package.zip"));
+            await CMUmcl.Content.ResumableDownload.DownloadAsync(_http, release.Url, cachedArchive,
+                new CMUmcl.Content.DownloadExpectation(release.Size, Sha256: release.Sha256),
+                (received, _) => progress.Report(100.0 * received / release.Size), ct).ConfigureAwait(false);
+            // Resume is only a transport optimization; the pinned signature and
+            // archive/version checks remain mandatory before starting the updater.
+            await Task.Run(() => UpdateProtocol.VerifyArchive(cachedArchive, release, _verificationKey), ct).ConfigureAwait(false);
+            File.Move(cachedArchive, Path.Combine(stage, "package.zip"));
             await File.WriteAllBytesAsync(Path.Combine(stage, "latest.json"), envelope, ct).ConfigureAwait(false);
             // Validate all archive entries before offering to close the launcher.
             await Task.Run(() => UpdateProtocol.ExtractArchive(Path.Combine(stage, "package.zip"), Path.Combine(stage, "preview")), ct).ConfigureAwait(false);

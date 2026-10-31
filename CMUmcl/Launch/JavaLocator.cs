@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.Win32;
+using System.Runtime.InteropServices;
+using CMUmcl.Content;
 
 namespace CMUmcl.Launch
 {
@@ -13,6 +15,18 @@ namespace CMUmcl.Launch
         public string JavaPath { get; init; } = string.Empty;
         public string Version { get; init; } = string.Empty;
         public int Major { get; init; }
+        public string Architecture { get; init; } = "unknown";
+        public string Vendor { get; init; } = string.Empty;
+        public int Bits => Architecture is "x86" or "i386" ? 32 : Architecture is "x64" or "aarch64" or "arm64" or "amd64" ? 64 : 0;
+        public string DisplayName => $"Java {Version} · {Architecture}" + (Vendor.Length > 0 ? $" · {Vendor}" : "");
+        public override string ToString() => DisplayName;
+        public bool IsSupportedArchitecture => Architecture switch
+        {
+            "unknown" or "x86" or "i386" => true,
+            "x64" or "amd64" => RuntimeInformation.OSArchitecture is System.Runtime.InteropServices.Architecture.X64 or System.Runtime.InteropServices.Architecture.Arm64,
+            "arm64" or "aarch64" => RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64,
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -33,8 +47,9 @@ namespace CMUmcl.Launch
         /// Only entries whose major version could be determined are returned (entries
         /// with an undeterminable major cannot be proven compatible and are excluded).
         /// </summary>
-        public static IReadOnlyList<JavaInfo> Scan()
+        public static IReadOnlyList<JavaInfo> Scan(System.Threading.CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             var roots = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -108,19 +123,34 @@ namespace CMUmcl.Launch
                 // Best effort only.
             }
 
-            var result = new List<JavaInfo>();
-            foreach (string root in roots)
+            // Include runtimes already downloaded by this launcher and the official launcher.
+            foreach (string parent in new[] {
+                Path.Combine(LauncherPaths.RootDirectory, "java", "runtime"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft", "runtime") })
+            {
+                foreach (string component in SafeEnumerateDirectories(parent))
+                {
+                    AddRoot(roots, seen, component);
+                    foreach (string child in SafeEnumerateDirectories(component))
+                    {
+                        AddRoot(roots, seen, child);
+                        foreach (string nested in SafeEnumerateDirectories(child)) AddRoot(roots, seen, nested);
+                    }
+                }
+            }
+            var result = new System.Collections.Concurrent.ConcurrentBag<JavaInfo>();
+            System.Threading.Tasks.Parallel.ForEach(roots, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, root =>
             {
                 JavaInfo? info = Detect(root);
                 if (info != null && info.Major > 0)
                     result.Add(info);
-            }
-            return result;
+            });
+            return result.OrderByDescending(j => j.Major).ThenBy(j => j.JavaPath, StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
         /// <summary>
         /// Selects the best candidate for the required major version: exact match first,
-        /// otherwise the lowest major ≥ required. Prefers javaw.exe, then the highest
+        /// never silently substitutes a newer major. Prefers 64-bit, javaw.exe, then the highest
         /// full version. Returns null when nothing matches (never a lower version).
         /// </summary>
         public static JavaInfo? Select(int requiredMajor, IReadOnlyList<JavaInfo> candidates)
@@ -128,7 +158,7 @@ namespace CMUmcl.Launch
             if (requiredMajor <= 0 || candidates == null)
                 return null;
 
-            var eligible = candidates.Where(c => c.Major > 0).ToList();
+            var eligible = candidates.Where(c => c.Major > 0 && c.IsSupportedArchitecture && (requiredMajor < 21 || c.Bits != 32)).ToList();
             if (eligible.Count == 0)
                 return null;
 
@@ -136,12 +166,8 @@ namespace CMUmcl.Launch
             if (exact.Count > 0)
                 return BestOf(exact);
 
-            var higher = eligible.Where(c => c.Major >= requiredMajor).ToList();
-            if (higher.Count == 0)
-                return null;
-
-            int bestMajor = higher.Min(c => c.Major);
-            return BestOf(higher.Where(c => c.Major == bestMajor).ToList());
+            // A newer Java is not necessarily compatible with old loaders/mods.
+            return null;
         }
 
         /// <summary>
@@ -164,6 +190,7 @@ namespace CMUmcl.Launch
             string javaPath = hasJavaw ? javaw : java;
             string version = string.Empty;
             int major = 0;
+            string architecture = "unknown", vendor = string.Empty;
 
             string releasePath = Path.Combine(root, "release");
             if (File.Exists(releasePath))
@@ -173,6 +200,8 @@ namespace CMUmcl.Launch
                     string content = File.ReadAllText(releasePath);
                     major = ParseJavaMajorFromRelease(content) ?? 0;
                     version = ExtractReleaseVersion(content) ?? string.Empty;
+                    architecture = ReleaseValue(content, "OS_ARCH") ?? "unknown";
+                    vendor = ReleaseValue(content, "IMPLEMENTOR") ?? string.Empty;
                 }
                 catch
                 {
@@ -188,7 +217,8 @@ namespace CMUmcl.Launch
                     version = output.Split('\n')[0].Trim();
             }
 
-            return new JavaInfo { JavaPath = javaPath, Version = version, Major = major };
+            architecture = ReadPeArchitecture(javaPath) ?? architecture;
+            return new JavaInfo { JavaPath = javaPath, Version = version, Major = major, Architecture = architecture, Vendor = vendor };
         }
 
         /// <summary>
@@ -213,6 +243,8 @@ namespace CMUmcl.Launch
 
             if (File.Exists(full))
             {
+                string name = Path.GetFileName(full);
+                if (!name.Equals("java.exe", StringComparison.OrdinalIgnoreCase) && !name.Equals("javaw.exe", StringComparison.OrdinalIgnoreCase)) return null;
                 string? binDir = Path.GetDirectoryName(full);
                 if (binDir != null && Path.GetFileName(binDir).Equals("bin", StringComparison.OrdinalIgnoreCase))
                     return Detect(Path.GetDirectoryName(binDir)!);
@@ -221,7 +253,7 @@ namespace CMUmcl.Launch
             }
 
             if (Directory.Exists(full))
-                return Detect(full);
+                return Detect(Path.GetFileName(full).Equals("bin", StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(full)! : full);
 
             return null;
         }
@@ -289,7 +321,8 @@ namespace CMUmcl.Launch
         private static JavaInfo BestOf(List<JavaInfo> list)
         {
             return list
-                .OrderByDescending(c => PreferJavaw(c))
+                .OrderByDescending(c => c.Bits == 64)
+                .ThenByDescending(c => PreferJavaw(c))
                 .ThenByDescending(c => c.Version, VersionComparer)
                 .First();
         }
@@ -364,14 +397,41 @@ namespace CMUmcl.Launch
                     },
                 };
                 proc.Start();
-                string output = proc.StandardError.ReadToEnd() + proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(5000);
-                return output;
+                var stderr = proc.StandardError.ReadToEndAsync();
+                var stdout = proc.StandardOutput.ReadToEndAsync();
+                if (!proc.WaitForExit(3000))
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { }
+                    return string.Empty;
+                }
+                if (!System.Threading.Tasks.Task.WaitAll(new System.Threading.Tasks.Task[] { stderr, stdout }, 1000)) return string.Empty;
+                return stderr.Result + stdout.Result;
             }
             catch
             {
                 return string.Empty;
             }
+        }
+
+        private static string? ReleaseValue(string content, string key)
+            => content.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith(key + "=", StringComparison.Ordinal))?
+                .Substring(key.Length + 1).Trim().Trim('"');
+
+        private static string? ReadPeArchitecture(string path)
+        {
+            try
+            {
+                using var stream = File.OpenRead(path);
+                using var reader = new BinaryReader(stream);
+                if (reader.ReadUInt16() != 0x5A4D) return null;
+                stream.Position = 0x3c;
+                int offset = reader.ReadInt32();
+                if (offset < 64 || offset > stream.Length - 6) return null;
+                stream.Position = offset;
+                if (reader.ReadUInt32() != 0x4550) return null;
+                return reader.ReadUInt16() switch { 0x8664 => "x64", 0x14c => "x86", 0xaa64 => "arm64", _ => "unknown" };
+            }
+            catch { return null; }
         }
 
         private static void AddRoot(List<string> roots, HashSet<string> seen, string? dir)

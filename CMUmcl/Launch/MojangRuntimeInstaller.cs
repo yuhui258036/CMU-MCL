@@ -51,11 +51,7 @@ namespace CMUmcl.Launch
 
         public MojangRuntimeInstaller()
         {
-            var handler = new HttpClientHandler
-            {
-                AllowAutoRedirect = true,
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
             _http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(30) };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("CMUmcl/0.1.0");
         }

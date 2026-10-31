@@ -92,11 +92,18 @@ namespace CMUmcl
             CreateInstanceView.InstanceCreated += CreateInstanceView_InstanceCreated;
 
             _settings = _settingsStore.Load();
+            Appearance.AppearanceManager.Initialize(_settings);
+            Appearance.AppearanceManager.TrackWindow(this);
             InitializeSettingsPage();
+            _preferencesReady = true;
+            Appearance.AppearanceManager.BackgroundChanged += UpdateBackgroundStatus;
+            Closing += Preferences_Closing;
+            UpdateBackgroundStatus();
             LauncherUpdateStatus.Text = "当前版本 " + LauncherUpdateClient.CurrentVersion.ToString(3);
             Closed += (_, _) =>
             {
                 _windowClosed = true;
+                Appearance.AppearanceManager.BackgroundChanged -= UpdateBackgroundStatus;
                 _updateLifetime.Cancel();
                 _launcherUpdates.Dispose();
             };
@@ -349,7 +356,9 @@ namespace CMUmcl
             UpdateNavStyles();
 
             HeaderTitleText.Text = "设置";
-            HeaderStatusText.Text = string.Empty;
+            HeaderStatusText.Text = "启动器设置";
+            if (!_javaScanStarted) _ = ScanJavaAsync();
+            UpdateMemoryPreview();
             RefreshButton.Visibility = Visibility.Collapsed;
             NewInstanceButton.Visibility = Visibility.Collapsed;
 
@@ -361,7 +370,6 @@ namespace CMUmcl
             InstancesEmptyStateText.Visibility = Visibility.Collapsed;
 
             SettingsScroll.Visibility = Visibility.Visible;
-            SettingsStatusText.Text = string.Empty;
         }
 
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)
@@ -756,27 +764,35 @@ namespace CMUmcl
 
         private void LoadSettingsIntoControls()
         {
-            bool manual = !string.IsNullOrWhiteSpace(_settings.JavaPath);
-            JavaAutoRadio.IsChecked = !manual;
-            JavaManualRadio.IsChecked = manual;
+            _loadingPreferences = true;
+            try
+            {
+                bool manual = !string.IsNullOrWhiteSpace(_settings.JavaPath);
+                JavaAutoRadio.IsChecked = !manual;
+                JavaManualRadio.IsChecked = manual;
 
-            JavaPathTextBox.Text = _settings.JavaPath ?? string.Empty;
-            JavaPathTextBox.IsEnabled = manual;
-            BrowseJavaButton.IsEnabled = manual;
+                JavaPathTextBox.Text = _settings.JavaPath ?? string.Empty;
+                JavaPathTextBox.IsEnabled = manual;
+                BrowseJavaButton.IsEnabled = manual;
+                JavaPathRow.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
 
-            MemoryTextBox.Text = _settings.MaxMemoryMb.ToString();
+                MemoryTextBox.Text = _settings.MaxMemoryMb.ToString();
 
-            int index = (int)_settings.VersionIsolation;
-            IsolationComboBox.SelectedIndex = index >= 0 && index <= 2 ? index : 1;
+                int index = (int)_settings.VersionIsolation;
+                IsolationComboBox.SelectedIndex = index >= 0 && index <= 2 ? index : 1;
 
-            InstancesDirectoryTextBox.Text = _settings.InstancesDirectory ?? string.Empty;
-            UpdateInstancesDirectoryHint();
-            ShowInstancesError(null);
+                InstancesDirectoryTextBox.Text = _settings.InstancesDirectory ?? string.Empty;
+                UpdateInstancesDirectoryHint();
+                ShowInstancesError(null);
 
-            AutoUpdatePacksCheck.IsChecked = _settings.AutoUpdatePacks;
+                AutoUpdatePacksCheck.IsChecked = _settings.AutoUpdatePacks;
 
-            UpdateJavaDetectedText();
-            ClearErrors();
+                LoadPreferenceControls();
+                UpdateJavaDetectedText();
+                ClearErrors();
+            }
+            finally { _loadingPreferences = false; }
+            UpdateMemoryPreview();
         }
 
         private void JavaMode_Checked(object sender, RoutedEventArgs e)
@@ -784,9 +800,12 @@ namespace CMUmcl
             if (JavaPathTextBox == null) return;
 
             bool manual = JavaManualRadio.IsChecked == true;
+            if (!manual) JavaCandidatesCombo.SelectedIndex = -1;
             JavaPathTextBox.IsEnabled = manual;
             BrowseJavaButton.IsEnabled = manual;
+            JavaPathRow.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
             ShowJavaError(null);
+            if (!manual) SavePreference(s => s.JavaPath = null);
             UpdateJavaDetectedText();
         }
 
@@ -795,22 +814,6 @@ namespace CMUmcl
             if (JavaDetectedText == null) return;
             ShowJavaError(null);
             UpdateJavaDetectedText();
-        }
-
-        private void UpdateJavaDetectedText()
-        {
-            string path = JavaPathTextBox.Text;
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                JavaDetectedText.Text = "自动选择（启动时检测或自动下载）";
-                return;
-            }
-
-            JavaInfo? info = JavaLocator.DetectExecutable(path);
-            if (info != null && info.Major > 0)
-                JavaDetectedText.Text = $"检测到 Java {info.Major}（{info.Version}）";
-            else
-                JavaDetectedText.Text = "未能检测到 Java 版本";
         }
 
         private void BrowseJavaButton_Click(object sender, RoutedEventArgs e)
@@ -824,6 +827,7 @@ namespace CMUmcl
 
             if (dlg.ShowDialog(this) == true)
             {
+                JavaManualRadio.IsChecked = true;
                 JavaPathTextBox.Text = dlg.FileName;
                 UpdateJavaDetectedText();
             }
@@ -851,6 +855,7 @@ namespace CMUmcl
                 2 => "每个实例使用各自的独立目录。",
                 _ => "仅模组实例使用独立目录；原版实例共用游戏目录。",
             };
+            if (IsolationComboBox.SelectedIndex >= 0) SavePreference(s => s.VersionIsolation = (VersionIsolation)IsolationComboBox.SelectedIndex);
         }
 
         private void OpenRootButton_Click(object sender, RoutedEventArgs e)
@@ -886,7 +891,7 @@ namespace CMUmcl
             InstancesDirectoryHintText.Text = $"默认位置：{LauncherPaths.DefaultInstancesDirectory}";
         }
 
-        private void BrowseInstancesButton_Click(object sender, RoutedEventArgs e)
+        private async void BrowseInstancesButton_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFolderDialog
             {
@@ -898,7 +903,9 @@ namespace CMUmcl
 
             if (dlg.ShowDialog(this) == true)
             {
-                InstancesDirectoryTextBox.Text = dlg.FolderName;
+                string? directory = LauncherPaths.NormalizeInstancesDirectory(dlg.FolderName);
+                if (directory == null) { ShowInstancesError("游戏目录无效，请选择其他目录。"); return; }
+                await ChangeInstancesDirectoryAsync(directory);
                 UpdateInstancesDirectoryHint();
             }
         }
@@ -946,154 +953,6 @@ namespace CMUmcl
             return normalized;
         }
 
-        private async void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_updatingLauncher) return;
-            ClearErrors();
-            SettingsStatusText.Text = string.Empty;
-
-            if (_migrating)
-                return;
-
-            if (!ValidateJavaPath(out string? javaError))
-            {
-                ShowJavaError(javaError);
-                return;
-            }
-
-            if (!ValidateMemory(out string? memoryError))
-            {
-                ShowMemoryError(memoryError);
-                return;
-            }
-
-            string? newInstancesDirectory = ResolveInstancesDirectory(out string? dirError);
-            if (dirError != null)
-            {
-                ShowInstancesError(dirError);
-                return;
-            }
-
-            bool manual = JavaManualRadio.IsChecked == true;
-            string? path = JavaPathTextBox.Text?.Trim();
-            int isolationIndex = IsolationComboBox.SelectedIndex;
-
-            // Determine whether the instance storage location actually changed.
-            string oldInstances = LauncherPaths.InstancesDirectory;
-            string newInstances = newInstancesDirectory ?? LauncherPaths.DefaultInstancesDirectory;
-            bool directoryChanged = !string.Equals(oldInstances, newInstances, StringComparison.OrdinalIgnoreCase);
-
-            if (directoryChanged)
-            {
-                var records = _installedState.ListRecords();
-                if (records.Count > 0)
-                {
-                    var confirm = MessageBox.Show(
-                        this,
-                        $"更改实例存放位置将迁移 {records.Count} 个已安装实例。\n\n源目录：{oldInstances}\n目标目录：{newInstances}\n\n是否继续？",
-                        "迁移实例",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
-
-                    if (confirm != MessageBoxResult.Yes)
-                    {
-                        SettingsStatusText.Text = "已取消，未做任何更改。";
-                        return;
-                    }
-
-                    try
-                    {
-                        _migrating = true;
-                        SaveSettingsButton.IsEnabled = false;
-
-                        // Detect naming conflicts first and let the user rename each one.
-                        IReadOnlyDictionary<string, MigrationNameOverride>? overrides = null;
-                        IReadOnlyList<MigrationConflict> conflicts = InstanceMigrationService.FindConflicts(
-                            oldInstances,
-                            newInstances,
-                            records);
-                        if (conflicts.Count > 0)
-                        {
-                            var conflictDialog = new MigrationConflictWindow(conflicts, newInstances)
-                            {
-                                Owner = this,
-                            };
-
-                            bool? conflictResult = conflictDialog.ShowDialog();
-                            if (conflictResult != true || conflictDialog.Result == null)
-                            {
-                                SettingsStatusText.Text = "已取消迁移。";
-                                return;
-                            }
-
-                            overrides = conflictDialog.Result;
-                        }
-
-                        var progress = new Progress<MigrationProgress>(p => SettingsStatusText.Text = p.Message);
-                        MigrationResult result = await InstanceMigrationService.MigrateAsync(
-                            oldInstances,
-                            newInstances,
-                            records,
-                            progress,
-                            overrides: overrides);
-
-                        // Commit: persist settings + records, then remove the old directories.
-                        _settings.JavaPath = manual && !string.IsNullOrWhiteSpace(path) ? path : null;
-                        _settings.MaxMemoryMb = int.Parse(MemoryTextBox.Text.Trim());
-                        _settings.VersionIsolation = isolationIndex >= 0 && isolationIndex <= 2
-                            ? (VersionIsolation)isolationIndex
-                            : VersionIsolation.ModdedOnly;
-                        _settings.InstancesDirectory = newInstancesDirectory;
-                        _settings.AutoUpdatePacks = AutoUpdatePacksCheck.IsChecked == true;
-
-                        bool saved = _settingsStore.Save(_settings);
-                        bool applied = saved && _installedState.ApplyMigration(result.UpdatedRecords);
-
-                        if (saved && applied)
-                        {
-                            DeleteDirectories(result.SourceDirectories);
-                            _settings = _settingsStore.Load();
-                            SettingsStatusText.Text = "设置已保存，实例迁移完成。";
-                            RefreshCardDisplayNames();
-                        }
-                        else
-                        {
-                            // Roll back the copies; the originals are intact.
-                            DeleteDirectories(result.TargetDirectories);
-                            SettingsStatusText.Text = "保存设置失败，已保留原实例目录。";
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        SettingsStatusText.Text = "迁移已取消，未做任何更改。";
-                    }
-                    catch (Exception ex)
-                    {
-                        SettingsStatusText.Text = "迁移失败：" + ex.Message;
-                    }
-                    finally
-                    {
-                        _migrating = false;
-                        SaveSettingsButton.IsEnabled = true;
-                    }
-
-                    return;
-                }
-            }
-
-            // No migration needed — save directly.
-            _settings.JavaPath = manual && !string.IsNullOrWhiteSpace(path) ? path : null;
-            _settings.MaxMemoryMb = int.Parse(MemoryTextBox.Text.Trim());
-            _settings.VersionIsolation = isolationIndex >= 0 && isolationIndex <= 2
-                ? (VersionIsolation)isolationIndex
-                : VersionIsolation.ModdedOnly;
-            _settings.InstancesDirectory = newInstancesDirectory;
-            _settings.AutoUpdatePacks = AutoUpdatePacksCheck.IsChecked == true;
-
-            _settingsStore.Save(_settings);
-            SettingsStatusText.Text = "设置已保存。";
-        }
-
         private static void DeleteDirectories(IEnumerable<string> directories)
         {
             foreach (string dir in directories)
@@ -1108,57 +967,6 @@ namespace CMUmcl
                     // Best effort.
                 }
             }
-        }
-
-        private bool ValidateJavaPath(out string? error)
-        {
-            error = null;
-
-            if (JavaManualRadio.IsChecked != true)
-                return true;
-
-            string? path = JavaPathTextBox.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                error = "请指定 Java 路径，或改选“自动选择”。";
-                return false;
-            }
-
-            JavaInfo? info = JavaLocator.DetectExecutable(path);
-            if (info == null || info.Major <= 0)
-            {
-                error = "无法从该路径读取 Java 版本信息。请选择有效的 javaw.exe。";
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool ValidateMemory(out string? error)
-        {
-            error = null;
-
-            if (!int.TryParse(MemoryTextBox.Text?.Trim(), out int mb))
-            {
-                error = "内存值必须是数字。";
-                return false;
-            }
-
-            const long min = 1024;
-            if (mb < min)
-            {
-                error = "内存不能小于 1024 MB。";
-                return false;
-            }
-
-            long totalMb = GetSystemTotalMemoryMb();
-            if (totalMb > 0 && mb > totalMb)
-            {
-                error = $"内存不能超过系统总内存（约 {FormatUtils.FormatBytes(totalMb * 1024L * 1024L)}）。";
-                return false;
-            }
-
-            return true;
         }
 
         private void ClearErrors()

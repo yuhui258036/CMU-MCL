@@ -5,6 +5,7 @@
 !/NOTICE
 !/CMUmcl/
 !/CMUmcl.Updater/
+!/CMUmcl.Bootstrap/
 !/tests/
 !/docs/
 
@@ -17,9 +18,17 @@
 /CMUmcl.Updater/bin/
 /CMUmcl.Updater/obj/
 /CMUmcl.Updater/*.user
+/CMUmcl.Bootstrap/bin/
+/CMUmcl.Bootstrap/obj/
 /tests/*
 !/tests/LauncherUpdate.Tests/
 !/tests/LauncherUpdate.UiAcceptance/
+!/tests/ResourceDownload.Tests/
+!/tests/LauncherSettings.Tests/
+/tests/LauncherSettings.Tests/bin/
+/tests/LauncherSettings.Tests/obj/
+/tests/ResourceDownload.Tests/bin/
+/tests/ResourceDownload.Tests/obj/
 /tests/LauncherUpdate.Tests/bin/
 /tests/LauncherUpdate.Tests/obj/
 /tests/LauncherUpdate.UiAcceptance/bin/

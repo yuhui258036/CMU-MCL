@@ -1,80 +1,78 @@
 <Window x:Class="CMUmcl.LoginWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CMUmcl"
-        Icon="/Assets/CMUmcl.ico"
-        Width="420" Height="560"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize"
-        Background="{StaticResource BgBrush}"
-        FontFamily="Segoe UI, Microsoft YaHei UI">
-    <Window.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Margin" Value="0,0,0,4" />
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="32,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- Branding -->
-        <TextBlock Grid.Row="0" Text="CMUmcl" FontSize="34" FontWeight="Bold" />
-        <TextBlock Grid.Row="1" Text="中南大学 Minecraft 社区启动器"
-                   FontSize="14" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,24" />
-
-        <!-- Account -->
-        <TextBlock Grid.Row="2" Text="CSU-MC 皮肤站账号" Style="{StaticResource Label}" />
-        <TextBox x:Name="UsernameBox" Grid.Row="3" Height="38" Margin="0,0,0,12"
-                 KeyDown="UsernameBox_KeyDown" />
-
-        <!-- Password -->
-        <TextBlock Grid.Row="4" Text="密码" Style="{StaticResource Label}" />
-        <PasswordBox x:Name="PasswordBox" Grid.Row="5" Height="38" Margin="0,0,0,12"
-                     KeyDown="PasswordBox_KeyDown" />
-
-        <!-- Error message -->
-        <TextBlock x:Name="ErrorText" Grid.Row="6" Text=""
-                   Foreground="{StaticResource ErrorBrush}" FontSize="13"
-                   TextWrapping="Wrap" Margin="0,0,0,10" MinHeight="18" />
-
-        <!-- Remember login -->
-        <CheckBox x:Name="RememberBox" Grid.Row="7" Content="记住登录"
-                  HorizontalAlignment="Left" Margin="0,0,0,16" IsChecked="True" />
-
-        <!-- Buttons -->
-        <Grid Grid.Row="8" VerticalAlignment="Top">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Button x:Name="LoginButton" Grid.Row="0" Content="登录"
-                    Style="{StaticResource PrimaryButton}" Height="42"
-                    Click="LoginButton_Click" />
-            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
-                <Button Content="注册账号" Style="{StaticResource LinkButton}" Click="RegisterButton_Click" />
-                <TextBlock Text="·" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" Margin="4,0" />
-                <Button Content="忘记密码" Style="{StaticResource LinkButton}" Click="ForgotButton_Click" />
-            </StackPanel>
-        </Grid>
-
-        <!-- Version -->
-        <TextBlock Grid.Row="9" Text="版本 0.1.0" FontSize="11"
-                   Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" Margin="0,16,0,0" />
-    </Grid>
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+ Title="CMUmcl" Icon="/Assets/CMUmcl.ico" Width="840" Height="580" WindowStartupLocation="CenterScreen"
+ WindowStyle="None" ResizeMode="CanMinimize" Background="{DynamicResource WindowBackdropBrush}" Foreground="{DynamicResource TextBrush}"
+ FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI" TextOptions.TextFormattingMode="Ideal">
+ <shell:WindowChrome.WindowChrome>
+  <shell:WindowChrome CaptionHeight="40" ResizeBorderThickness="0" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
+ </shell:WindowChrome.WindowChrome>
+ <Window.Resources>
+  <Style x:Key="FieldLabel" TargetType="Label">
+   <Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="FontSize" Value="13" />
+   <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0,0,0,8" />
+  </Style>
+  <Style x:Key="LoginAction" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+   <Setter Property="Template" Value="{StaticResource ModernButtonTemplate}" /><Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style x:Key="LoginLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+   <Setter Property="Template" Value="{StaticResource ModernButtonTemplate}" /><Setter Property="FontSize" Value="13" />
+  </Style>
+ </Window.Resources>
+ <Border Background="{DynamicResource WindowBackdropBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1">
+  <Grid>
+   <Grid.RowDefinitions><RowDefinition Height="40" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+   <Grid Background="{DynamicResource SidebarBrush}">
+    <TextBlock Text="CMUmcl" FontSize="12" VerticalAlignment="Center" Margin="18,0" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,6,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+     <Button x:Name="ThemeToggleButton" Style="{StaticResource IconButton}" Click="ToggleTheme_Click" AutomationProperties.Name="切换主题模式">
+      <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24"><Path x:Name="ThemeIcon" Style="{StaticResource TitleIconPath}" Data="{StaticResource MoonIconGeometry}" /></Canvas></Viewbox>
+     </Button>
+     <Border Width="1" Height="14" Margin="6,0" Background="{DynamicResource SeparatorBrush}" />
+     <Button Style="{StaticResource IconButton}" Click="Minimize_Click" ToolTip="最小化" AutomationProperties.Name="最小化">
+      <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24"><Path Style="{StaticResource TitleIconPath}" Data="M5,12 L19,12" /></Canvas></Viewbox>
+     </Button>
+     <Button Style="{StaticResource IconButton}" Click="Close_Click" ToolTip="关闭" AutomationProperties.Name="关闭">
+      <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24"><Path Style="{StaticResource TitleIconPath}" Data="M6,6 L18,18 M18,6 L6,18" /></Canvas></Viewbox>
+     </Button>
+    </StackPanel>
+   </Grid>
+   <Grid Grid.Row="1" Margin="32,28">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="280" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+    <Border Background="{DynamicResource SidebarBrush}" CornerRadius="6" Margin="0,0,24,0" Padding="24">
+     <Grid>
+      <StackPanel VerticalAlignment="Center" Margin="0,0,0,32">
+       <Image Width="64" Height="64" HorizontalAlignment="Left" Margin="0,0,0,22"><Image.Source><BitmapImage UriSource="/Assets/CMUmcl-icon.png" DecodePixelWidth="192" /></Image.Source></Image>
+       <TextBlock Text="CMUmcl" FontSize="32" FontWeight="SemiBold" />
+       <TextBlock Text="中南大学 Minecraft 社区" FontSize="14" Margin="0,12,0,0" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
+       <Border Width="28" Height="3" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Left" Margin="0,24,0,0" CornerRadius="1" />
+      </StackPanel>
+      <TextBlock x:Name="VersionText" VerticalAlignment="Bottom" FontSize="12" Foreground="{DynamicResource MutedTextBrush}" />
+     </Grid>
+    </Border>
+    <Border x:Name="LoginCard" Grid.Column="1" Background="{DynamicResource PopupBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="28,24">
+     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+      <StackPanel>
+       <TextBlock Text="登录" FontSize="26" FontWeight="SemiBold" />
+       <TextBlock Text="使用你的 CSU-MC 皮肤站账号继续" Margin="0,6,0,24" FontSize="13" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
+       <Label Content="用户名 / 邮箱" Target="{Binding ElementName=UsernameBox}" Style="{StaticResource FieldLabel}" />
+       <TextBox x:Name="UsernameBox" Height="42" Margin="0,0,0,16" FontSize="14" AutomationProperties.Name="用户名或邮箱" KeyDown="UsernameBox_KeyDown" />
+       <Label Content="密码" Target="{Binding ElementName=PasswordBox}" Style="{StaticResource FieldLabel}" />
+       <PasswordBox x:Name="PasswordBox" Height="42" FontSize="14" AutomationProperties.Name="密码" KeyDown="PasswordBox_KeyDown" />
+       <Grid Margin="0,14,0,0">
+        <CheckBox x:Name="RememberBox" Content="记住登录" IsChecked="True" VerticalAlignment="Center" HorizontalAlignment="Left" />
+        <Button Content="忘记密码" HorizontalAlignment="Right" Style="{StaticResource LoginLink}" Click="ForgotButton_Click" />
+       </Grid>
+       <TextBlock x:Name="ErrorText" Foreground="{DynamicResource ErrorBrush}" FontSize="12" TextWrapping="Wrap" MinHeight="20" Margin="0,10,0,8" AutomationProperties.LiveSetting="Polite" />
+       <Button x:Name="LoginButton" Content="登录" Style="{StaticResource LoginAction}" Height="42" Click="LoginButton_Click" />
+       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+        <TextBlock Text="还没有账号？" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+        <Button Content="注册账号" Style="{StaticResource LoginLink}" Click="RegisterButton_Click" />
+       </StackPanel>
+      </StackPanel>
+     </ScrollViewer>
+    </Border>
+   </Grid>
+  </Grid>
+ </Border>
 </Window>

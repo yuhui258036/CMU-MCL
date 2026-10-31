@@ -49,11 +49,13 @@ internal static class UpdateUiFixture
         File.WriteAllText(updaterProject, """
             <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>CMUmcl.Updater</AssemblyName></PropertyGroup></Project>
             """);
-        var localConfig = Path.Combine(source, ".tmp", "client-update-validation", "NuGet.Config");
-        await Command("restore", updaterProject, "--configfile", localConfig, "-r", "win-x64", "-p:SelfContained=true",
-            "-p:NuGetAudit=false", "-p:RestorePackagesPath=" + Path.Combine(source, ".nuget", "packages"));
+        // Do not depend on another developer's ignored .tmp/.nuget directories.
+        // The usual NuGet configuration and NUGET_PACKAGES environment apply.
+        var selfContained = Environment.GetEnvironmentVariable("CMUMCL_UI_SELF_CONTAINED") ?? "true";
+        if (selfContained is not ("true" or "false")) throw new ArgumentException("CMUMCL_UI_SELF_CONTAINED must be true or false.");
+        await Command("restore", updaterProject, "-r", "win-x64", "-p:SelfContained=" + selfContained, "-p:NuGetAudit=false");
         var updaterPublish = Path.Combine(root, "updater-publish");
-        await Command("publish", updaterProject, "--no-restore", "-c", "Release", "-r", "win-x64", "--self-contained", "true",
+        await Command("publish", updaterProject, "--no-restore", "-c", "Release", "-r", "win-x64", "--self-contained", selfContained,
             "-p:UseSharedCompilation=false", "-o", updaterPublish);
 
         static void CopyTree(string from, string to)
@@ -96,7 +98,14 @@ internal static class UpdateUiFixture
         Save("no-update.json", Envelope(release with { Version = "0.1.0" }));
         Save("bad-hash.json", Envelope(release with { Sha256 = new string('0', 64) }));
         Save("tampered.json", available with { Payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(release with { Version = "9.9.9" }, UpdateProtocol.JsonOptions)) });
-        File.Copy(Path.Combine(source, ".tmp", "production-update-validation", "cdn-latest.json"), Path.Combine(manifests, "legacy.json"));
+        File.WriteAllText(Path.Combine(manifests, "legacy.json"), """{"formatVersion":1,"version":"0.1.0-test","url":"https://example.invalid/legacy.bin"}""");
+        var resourceManifest = System.Text.Encoding.UTF8.GetBytes("""{"formatVersion":1,"instances":[]}""");
+        File.WriteAllBytes(Path.Combine(root, "resource-manifest.json"), resourceManifest);
+        File.WriteAllText(Path.Combine(root, "resource-manifest.json.sig"), JsonSerializer.Serialize(new
+        {
+            algorithm = "ECDSA-P256-SHA256",
+            signature = Convert.ToBase64String(key.SignData(resourceManifest, HashAlgorithmName.SHA256)),
+        }));
         File.WriteAllText(Path.Combine(root, "scenario.txt"), "available");
         File.WriteAllText(Path.Combine(root, "fixture-info.json"), JsonSerializer.Serialize(new
         {

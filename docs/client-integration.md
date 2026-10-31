@@ -1,5 +1,7 @@
 # PCL-CMU 魔改版 — PCL-CE Client Integration Points
 
+> 历史架构草案：本文面向早期 PCL-CE 接入方案。当前仓库的实际客户端是 `CMUmcl`（.NET 10 WPF + CmlLib），资源站请求由 `Content/ResourceManifestClient.cs` 负责，安装与增量更新由 `Content/PackInstaller.cs` 负责，共用下载传输实现为 `Content/ResumableDownload.cs`。不要将下文 PCL 类名当作当前源码入口。
+
 This document describes **where** the PCL-CE fork plugs in the local resource
 protocol. It references real PCL-CE symbols (verified against the `PCL-CE`
 tree) but provides **code-style snippets only** — the actual PCL-CE source is

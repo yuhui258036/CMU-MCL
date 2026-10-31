@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
@@ -33,18 +34,18 @@ namespace CMUmcl.Content
         };
 
         private readonly HttpClient _http;
+        private readonly string _publicKeyPem;
 
-        public ResourceManifestClient()
+        public ResourceManifestClient() : this(CMUmcl.Network.LauncherProxy.CreateHandler(), new Uri(BaseUrl + "/"), PublicKeyPem) { }
+
+        internal ResourceManifestClient(HttpMessageHandler handler, Uri baseAddress, string publicKeyPem)
         {
-            var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
-
+            _publicKeyPem = publicKeyPem;
             _http = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromSeconds(20),
-                BaseAddress = new Uri(BaseUrl + "/"),
+                BaseAddress = baseAddress,
+                MaxResponseContentBufferSize = 4 * 1024 * 1024,
             };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
             _http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
@@ -56,13 +57,32 @@ namespace CMUmcl.Content
         /// </summary>
         public async Task<ResourceManifest> GetManifestAsync(CancellationToken ct = default)
         {
+            // A detached signature and its manifest are two independently cached
+            // URLs. A publication/cache transition may expose a mismatched pair.
+            // Retry fresh pairs, but never accept unverified data.
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var result = await GetVerifiedManifestAsync(attempt, ct).ConfigureAwait(false);
+                if (result is not null) return result;
+                if (attempt < 2) await Task.Delay(200 * (attempt + 1), ct).ConfigureAwait(false);
+            }
+            throw new ResourceException("清单签名验证失败，已拒绝加载。请稍后重试。");
+        }
+
+        private async Task<ResourceManifest?> GetVerifiedManifestAsync(int attempt, CancellationToken ct)
+        {
             byte[] manifestBytes;
             byte[] sigBytes;
 
             try
             {
-                manifestBytes = await _http.GetByteArrayAsync("manifest.json", ct).ConfigureAwait(false);
-                sigBytes = await _http.GetByteArrayAsync("manifest.json.sig", ct).ConfigureAwait(false);
+                var suffix = attempt == 0 ? string.Empty : "?refresh=" + Guid.NewGuid().ToString("N");
+                var manifestTask = GetBytesAsync("manifest.json" + suffix, attempt > 0, ct);
+                var signatureTask = GetBytesAsync("manifest.json.sig" + suffix, attempt > 0, ct);
+                await Task.WhenAll(manifestTask, signatureTask).ConfigureAwait(false);
+                manifestBytes = await manifestTask.ConfigureAwait(false);
+                sigBytes = await signatureTask.ConfigureAwait(false);
+                if (sigBytes.Length > 65536) throw new ResourceException("签名文件过大，已拒绝加载。");
             }
             catch (HttpRequestException ex)
             {
@@ -91,7 +111,7 @@ namespace CMUmcl.Content
 
             if (!VerifySignature(manifestBytes, signature.Signature))
             {
-                throw new ResourceException("清单签名验证失败，已拒绝加载。");
+                return null;
             }
 
             ResourceManifest manifest;
@@ -117,13 +137,23 @@ namespace CMUmcl.Content
             return manifest;
         }
 
-        private static bool VerifySignature(byte[] data, string signatureBase64)
+        private async Task<byte[]> GetBytesAsync(string path, bool refresh, CancellationToken ct)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            if (refresh)
+                request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        }
+
+        private bool VerifySignature(byte[] data, string signatureBase64)
         {
             try
             {
                 byte[] signature = Convert.FromBase64String(signatureBase64);
                 using var ecdsa = ECDsa.Create();
-                ecdsa.ImportFromPem(PublicKeyPem);
+                ecdsa.ImportFromPem(_publicKeyPem);
                 return ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
             }
             catch (Exception)

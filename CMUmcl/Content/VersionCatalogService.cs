@@ -128,26 +128,14 @@ namespace CMUmcl.Content
 
         public VersionCatalogService()
         {
-            var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
-
-            // Loader version-list endpoints (Fabric/Quilt/NeoForge) can only be reached
-            // through a local proxy in some networks; opt the client into one when available.
-            IWebProxy? proxy = HttpProxyResolver.ResolveProxy();
-            if (proxy != null)
-            {
-                handler.Proxy = proxy;
-                handler.UseProxy = true;
-            }
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
 
             _http = new HttpClient(handler) { Timeout = VersionListTimeout };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
 
             // The Mojang version list is fetched by the launcher's own client; our timeout
             // wrapper below bounds the overall call regardless of its internal settings.
-            _launcher = new MinecraftLauncher();
+            _launcher = new MinecraftLauncher(MinecraftLauncherParameters.CreateDefault(new MinecraftPath(), _http));
             _fabric = new FabricInstaller(_http);
             _quilt = new QuiltInstaller(_http);
         }
