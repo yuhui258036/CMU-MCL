@@ -3,12 +3,14 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using CMUmcl.Auth;
 using CMUmcl.Content;
 using CMUmcl.Launch;
+using CMUmcl.Update;
 
 namespace CMUmcl
 {
@@ -31,6 +33,14 @@ namespace CMUmcl
         private bool _loading;
         private bool _migrating;
         private bool _handlingDrop;
+        private readonly LauncherUpdateClient _launcherUpdates;
+        private readonly CancellationTokenSource _updateLifetime = new();
+        private CancellationTokenSource? _updateDownload;
+        private (UpdateRelease Release, byte[] Envelope)? _availableUpdate;
+        private bool _checkingLauncherUpdate;
+        private bool _updatingLauncher;
+        private bool _windowClosed;
+        private int _activeOperations;
 
         private enum MainPage { Packs, Instances, Settings }
         private enum PacksContentState { Loading, Cards, Empty, Error }
@@ -52,7 +62,17 @@ namespace CMUmcl
             LaunchService launchService,
             SettingsStore settingsStore,
             LocalInstanceService localInstanceService)
+            : this(session, store, manifestClient, installer, installedState, launchService,
+                settingsStore, localInstanceService, new LauncherUpdateClient())
+        { }
+
+        internal MainWindow(
+            AuthSession session, AuthStore store, ResourceManifestClient manifestClient,
+            PackInstaller installer, InstalledStateStore installedState, LaunchService launchService,
+            SettingsStore settingsStore, LocalInstanceService localInstanceService,
+            LauncherUpdateClient launcherUpdates)
         {
+            _launcherUpdates = launcherUpdates;
             InitializeComponent();
 
             _session = session;
@@ -73,12 +93,110 @@ namespace CMUmcl
 
             _settings = _settingsStore.Load();
             InitializeSettingsPage();
+            LauncherUpdateStatus.Text = "当前版本 " + LauncherUpdateClient.CurrentVersion.ToString(3);
+            Closed += (_, _) =>
+            {
+                _windowClosed = true;
+                _updateLifetime.Cancel();
+                _launcherUpdates.Dispose();
+            };
             ShowPacksView();
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            _ = CheckLauncherUpdateAsync();
             await LoadManifestAsync();
+        }
+
+        private async void CheckLauncherUpdate_Click(object sender, RoutedEventArgs e) => await CheckLauncherUpdateAsync();
+
+        private async Task CheckLauncherUpdateAsync()
+        {
+            if (_checkingLauncherUpdate || _updatingLauncher) return;
+            _checkingLauncherUpdate = true;
+            CheckLauncherUpdateButton.IsEnabled = false;
+            InstallLauncherUpdateButton.IsEnabled = false;
+            LauncherUpdateStatus.Text = "正在检查客户端更新…";
+            try
+            {
+                _availableUpdate = await _launcherUpdates.CheckAsync(_updateLifetime.Token);
+                if (_windowClosed) return;
+                LauncherUpdateStatus.Text = _availableUpdate is { } available
+                    ? $"发现新版本 {available.Release.Version}。{available.Release.Notes}"
+                    : $"当前版本 {LauncherUpdateClient.CurrentVersion.ToString(3)} 已是最新。";
+                InstallLauncherUpdateButton.IsEnabled = _availableUpdate != null;
+            }
+            catch (OperationCanceledException) when (_updateLifetime.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                _availableUpdate = null;
+                if (!_windowClosed) LauncherUpdateStatus.Text = "暂时无法检查客户端更新：" + ex.Message;
+            }
+            finally
+            {
+                _checkingLauncherUpdate = false;
+                if (!_windowClosed) CheckLauncherUpdateButton.IsEnabled = true;
+            }
+        }
+
+        private void CancelLauncherUpdate_Click(object sender, RoutedEventArgs e) => _updateDownload?.Cancel();
+
+        private async void InstallLauncherUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_updatingLauncher || _checkingLauncherUpdate || _availableUpdate is not { } available) return;
+            if (_activeOperations != 0 || _migrating || CreateInstanceView.HasActiveOperation)
+            {
+                LauncherUpdateStatus.Text = "请等待当前下载、启动或迁移完成后再更新客户端。";
+                return;
+            }
+            _updatingLauncher = true;
+            CheckLauncherUpdateButton.IsEnabled = false;
+            InstallLauncherUpdateButton.IsEnabled = false;
+            CancelLauncherUpdateButton.Visibility = Visibility.Visible;
+            LauncherUpdateProgress.Visibility = Visibility.Visible;
+            _updateDownload = CancellationTokenSource.CreateLinkedTokenSource(_updateLifetime.Token);
+            try
+            {
+                var progress = new Progress<double>(value =>
+                {
+                    if (_windowClosed) return;
+                    LauncherUpdateProgress.Value = value;
+                    LauncherUpdateStatus.Text = $"正在下载客户端 {available.Release.Version}：{value:F1}%";
+                });
+                var stage = await _launcherUpdates.StageAsync(available.Release, available.Envelope, progress, _updateDownload.Token);
+                _updateDownload.Token.ThrowIfCancellationRequested();
+                if (_windowClosed) return;
+                LauncherUpdateStatus.Text = "下载与校验完成，准备安装。";
+                if (MessageBox.Show(this, $"已下载并验证 {available.Release.Version}。现在关闭客户端、安装更新并重新打开？",
+                    "客户端更新", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    LauncherUpdateClient.StartUpdater(stage);
+                    Application.Current.Shutdown();
+                }
+                else LauncherUpdateStatus.Text = "已取消安装；客户端保持当前版本。";
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_windowClosed) LauncherUpdateStatus.Text = "已取消客户端更新。";
+            }
+            catch (Exception ex)
+            {
+                if (!_windowClosed) LauncherUpdateStatus.Text = "客户端更新失败：" + ex.Message;
+            }
+            finally
+            {
+                _updateDownload.Dispose();
+                _updateDownload = null;
+                _updatingLauncher = false;
+                if (!_windowClosed)
+                {
+                    CheckLauncherUpdateButton.IsEnabled = true;
+                    InstallLauncherUpdateButton.IsEnabled = _availableUpdate != null;
+                    CancelLauncherUpdateButton.Visibility = Visibility.Collapsed;
+                    LauncherUpdateProgress.Visibility = Visibility.Collapsed;
+                }
+            }
         }
 
         // ------------------------------------------------------------------
@@ -94,6 +212,8 @@ namespace CMUmcl
         private void Window_Drop(object sender, DragEventArgs e)
         {
             e.Handled = true;
+
+            if (_updatingLauncher) return;
 
             if (_handlingDrop)
                 return;
@@ -264,6 +384,7 @@ namespace CMUmcl
 
         private void NewInstanceButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_updatingLauncher) return;
             CreateInstanceView.Open(_localInstanceService, _launchService);
         }
 
@@ -319,9 +440,12 @@ namespace CMUmcl
 
         private async void InstallButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_updatingLauncher) return;
             if (sender is Button { DataContext: PackCardViewModel vm })
             {
-                await InstallAsync(vm);
+                _activeOperations++;
+                try { await InstallAsync(vm); }
+                finally { _activeOperations--; }
             }
         }
 
@@ -410,9 +534,12 @@ namespace CMUmcl
 
         private async void LaunchButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_updatingLauncher) return;
             if (sender is Button { DataContext: InstanceCardViewModel vm })
             {
-                await LaunchInstanceAsync(vm);
+                _activeOperations++;
+                try { await LaunchInstanceAsync(vm); }
+                finally { _activeOperations--; }
             }
         }
 
@@ -601,6 +728,7 @@ namespace CMUmcl
 
         private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_updatingLauncher) return;
             _store.ClearSession();
             LogoutRequested?.Invoke();
             Close();
@@ -820,6 +948,7 @@ namespace CMUmcl
 
         private async void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_updatingLauncher) return;
             ClearErrors();
             SettingsStatusText.Text = string.Empty;
 

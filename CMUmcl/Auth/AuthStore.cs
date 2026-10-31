@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using CMUmcl.Content;
 
 namespace CMUmcl.Auth
 {
@@ -14,11 +15,8 @@ namespace CMUmcl.Auth
     /// </summary>
     public sealed class AuthStore
     {
-        private static readonly string DirectoryPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CMUmcl");
-
-        private static readonly string FilePath = Path.Combine(DirectoryPath, "auth.dat");
+        private static string DirectoryPath => LauncherPaths.RootDirectory;
+        private static string FilePath => Path.Combine(DirectoryPath, "auth.dat");
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {

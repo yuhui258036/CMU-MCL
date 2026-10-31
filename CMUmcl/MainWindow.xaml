@@ -1014,6 +1014,23 @@
                             </StackPanel>
                         </Border>
 
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="客户端更新" Style="{StaticResource SectionHeader}" />
+                                <TextBlock x:Name="LauncherUpdateStatus" TextWrapping="Wrap" Margin="0,8,0,12"
+                                           Foreground="{StaticResource MutedTextBrush}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="CheckLauncherUpdateButton" Content="检查更新" Style="{StaticResource SecondaryButton}"
+                                            Click="CheckLauncherUpdate_Click" />
+                                    <Button x:Name="InstallLauncherUpdateButton" Content="下载并安装" IsEnabled="False" Margin="12,0,0,0"
+                                            Style="{StaticResource PrimaryButton}" Click="InstallLauncherUpdate_Click" />
+                                    <Button x:Name="CancelLauncherUpdateButton" Content="取消下载" Visibility="Collapsed" Margin="12,0,0,0"
+                                            Style="{StaticResource SecondaryButton}" Click="CancelLauncherUpdate_Click" />
+                                </StackPanel>
+                                <ProgressBar x:Name="LauncherUpdateProgress" Visibility="Collapsed" Maximum="100" Height="5" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Save -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <Button x:Name="SaveSettingsButton" Content="保存设置" MinWidth="130"

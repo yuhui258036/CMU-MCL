@@ -4,6 +4,8 @@
 !/LICENSE
 !/NOTICE
 !/CMUmcl/
+!/CMUmcl.Updater/
+!/tests/
 !/docs/
 
 # CMUmcl build outputs and IDE files
@@ -12,6 +14,16 @@
 /CMUmcl/.vs/
 /CMUmcl/*.user
 /CMUmcl/**/*.user
+/CMUmcl.Updater/bin/
+/CMUmcl.Updater/obj/
+/CMUmcl.Updater/*.user
+/tests/*
+!/tests/LauncherUpdate.Tests/
+!/tests/LauncherUpdate.UiAcceptance/
+/tests/LauncherUpdate.Tests/bin/
+/tests/LauncherUpdate.Tests/obj/
+/tests/LauncherUpdate.UiAcceptance/bin/
+/tests/LauncherUpdate.UiAcceptance/obj/
 
 # Editor/R history artifacts
 **/.Rhistory

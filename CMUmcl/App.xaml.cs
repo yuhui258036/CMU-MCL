@@ -1,5 +1,7 @@
 using System;
 using System.Windows;
+using System.Threading;
+using CMUmcl.Update;
 using CMUmcl.Auth;
 using CMUmcl.Content;
 using CMUmcl.Launch;
@@ -16,10 +18,34 @@ namespace CMUmcl
         private SettingsStore? _settingsStore;
         private LaunchService? _launchService;
         private LocalInstanceService? _localInstanceService;
+        private Mutex? _installGate;
+        private bool _ownsInstallGate;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // Use a separate, explicit data root for portable runs and isolated acceptance tests.
+            if (e.Args.Length != 0)
+            {
+                if (e.Args.Length != 2 || e.Args[0] != "--data-directory" || !System.IO.Path.IsPathFullyQualified(e.Args[1]))
+                {
+                    MessageBox.Show("数据目录参数无效。用法：--data-directory <绝对路径>", "CMUmcl");
+                    Shutdown();
+                    return;
+                }
+                LauncherPaths.RootOverride = e.Args[1];
+            }
+
+            _installGate = new Mutex(false, UpdateProtocol.InstallLockName(AppContext.BaseDirectory));
+            try { _ownsInstallGate = _installGate.WaitOne(0); }
+            catch (AbandonedMutexException) { _ownsInstallGate = true; }
+            if (!_ownsInstallGate)
+            {
+                MessageBox.Show("此目录的客户端已在运行或正在更新，请稍后再打开。", "CMUmcl");
+                Shutdown();
+                return;
+            }
 
             // Load settings and ensure the on-disk layout exists before any service runs.
             _settingsStore = new SettingsStore();
@@ -157,6 +183,8 @@ namespace CMUmcl
             _manifestClient?.Dispose();
             _installer?.Dispose();
             _launchService?.Dispose();
+            if (_ownsInstallGate) _installGate?.ReleaseMutex();
+            _installGate?.Dispose();
             base.OnExit(e);
         }
     }

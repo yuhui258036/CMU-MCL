@@ -16,6 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CMUmcl.Updater\CMUmcl.Updater.csproj" ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true" AdditionalProperties="TargetFramework=$(TargetFramework)" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageReference Include="CmlLib.Core" Version="4.1.0" />
     <PackageReference Include="CmlLib.Core.Installer.NeoForge" Version="4.0.1" />
@@ -32,4 +34,17 @@
     <Resource Include="Assets\CMUmcl-icon.png" />
   </ItemGroup>
 
+  <Target Name="CopyUpdaterForBuild" AfterTargets="Build" Condition="'$(SkipUpdaterBuildCopy)' != 'true'">
+    <PropertyGroup>
+      <UpdaterOutputRoot>..\CMUmcl.Updater\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\</UpdaterOutputRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <UpdaterBuildFiles Include="$(UpdaterOutputRoot)**\*" Exclude="$(UpdaterOutputRoot)publish\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UpdaterBuildFiles)" DestinationFiles="@(UpdaterBuildFiles->'$(OutDir)updater\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+  <Target Name="PublishIndependentUpdater" AfterTargets="Publish">
+    <MSBuild Projects="..\CMUmcl.Updater\CMUmcl.Updater.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=$(SelfContained);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)updater\'));PublishSingleFile=false" />
+  </Target>
 </Project>

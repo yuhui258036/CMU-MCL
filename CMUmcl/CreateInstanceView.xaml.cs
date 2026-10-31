@@ -124,6 +124,7 @@ namespace CMUmcl
 
         private bool _ready;
         private bool _creating;
+        public bool HasActiveOperation => _creating || _importing;
         private bool _loadingGameVersions;
         private bool _loadingLoaderVersions;
         private bool _gameVersionsLoaded;
