@@ -38,19 +38,7 @@ namespace CMUmcl.Content
             _installedState = installedState ?? throw new ArgumentNullException(nameof(installedState));
             _instancesRoot = NormalizeInstancesRoot(instancesRoot);
 
-            var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
-
-            // File downloads may only be reachable through a local proxy in some networks;
-            // opt the client into one when available (same as PackInstaller / VersionCatalogService).
-            System.Net.IWebProxy? proxy = HttpProxyResolver.ResolveProxy();
-            if (proxy != null)
-            {
-                handler.Proxy = proxy;
-                handler.UseProxy = true;
-            }
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
 
             _http = CreateClient(handler);
         }

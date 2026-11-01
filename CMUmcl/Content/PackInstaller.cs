@@ -1,3 +1,4 @@
+using DownloadedFile = CMUmcl.Content.DownloadedContent;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,19 +37,7 @@ namespace CMUmcl.Content
         {
             _installedState = installedState;
 
-            var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
-
-            // Pack + index downloads may only be reachable through a local proxy in some
-            // networks; opt the client into one when available (same as VersionCatalogService).
-            IWebProxy? proxy = HttpProxyResolver.ResolveProxy();
-            if (proxy != null)
-            {
-                handler.Proxy = proxy;
-                handler.UseProxy = true;
-            }
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
 
             _http = CreateClient(handler);
         }
@@ -66,6 +55,9 @@ namespace CMUmcl.Content
             var client = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(30),
+                // Only the JSON file index uses buffered HTTP reads. Pack/mod
+                // bodies stream separately and keep their own size limits.
+                MaxResponseContentBufferSize = 32 * 1024 * 1024,
             };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
             return client;
@@ -275,7 +267,9 @@ namespace CMUmcl.Content
             byte[] bytes;
             try
             {
-                bytes = await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
+                using var indexTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                indexTimeout.CancelAfter(TimeSpan.FromSeconds(45));
+                bytes = await _http.GetByteArrayAsync(url, indexTimeout.Token).ConfigureAwait(false);
             }
             catch (HttpRequestException ex)
             {
@@ -342,10 +336,9 @@ namespace CMUmcl.Content
                     string relPath = PackFileSystem.NormalizeRelativePath(entry.Path);
                     string stagingTarget = PackFileSystem.ResolveUnder(stagingDir, PackFileSystem.SanitizeRelativePath(relPath));
 
-                    string url = entry.Downloads.First(u => PackFileIndexValidation.IsAllowedDownloadUrl(u));
-
                     Directory.CreateDirectory(Path.GetDirectoryName(stagingTarget)!);
-                    DownloadedFile downloaded = await DownloadToFileAsync(url, stagingTarget, progress: null, stage: string.Empty, ct).ConfigureAwait(false);
+                    DownloadedFile downloaded = await ResumableDownload.DownloadMirrorsAsync(_http, entry.Downloads,
+                        stagingTarget, new DownloadExpectation(entry.FileSize, entry.Hashes?.Sha512, Sha1: entry.Hashes?.Sha1), ct).ConfigureAwait(false);
 
                     if (!IndexEntryMatches(entry, downloaded))
                         throw new ResourceException($"文件校验失败：{entry.Path}（哈希不匹配）。");
@@ -551,7 +544,7 @@ namespace CMUmcl.Content
                 TotalBytes = expectedSize > 0 ? expectedSize : null,
             });
 
-            var downloaded = await DownloadToFileAsync(url, packPath, progress, "下载整合包", ct).ConfigureAwait(false);
+            var downloaded = await DownloadToFileAsync(url, packPath, progress, "下载整合包", ct, new DownloadExpectation(expectedSize > 0 ? expectedSize : null, expectedSha512, expectedSha256, expectedSha1)).ConfigureAwait(false);
 
             progress?.Report(new PackInstallProgress
             {
@@ -626,16 +619,18 @@ namespace CMUmcl.Content
             if (File.Exists(targetPath) && FileMatchesHashes(targetPath, file))
                 return;
 
-            string? url = null;
-            if (file.Downloads is { Count: > 0 })
-                url = file.Downloads[0];
-
-            if (string.IsNullOrWhiteSpace(url))
+            if (file.Downloads is not { Count: > 0 })
                 throw new ResourceException($"文件 {file.Path} 缺少下载地址。");
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
-            var downloaded = await DownloadToFileAsync(url, targetPath, progress: null, stage: string.Empty, ct).ConfigureAwait(false);
+            DownloadedFile downloaded;
+            try
+            {
+                downloaded = await ResumableDownload.DownloadMirrorsAsync(_http, file.Downloads, targetPath,
+                    new DownloadExpectation(file.FileSize, file.Hashes?.Sha512, Sha1: file.Hashes?.Sha1), ct).ConfigureAwait(false);
+            }
+            catch (IOException ex) { throw new ResourceException($"文件下载失败：{file.Path}，已保留可用断点。", ex); }
 
             if (!DownloadedMatches(file, downloaded))
             {
@@ -652,8 +647,16 @@ namespace CMUmcl.Content
                 if (file.FileSize is long size && info.Length != size)
                     return false;
 
-                byte[] bytes = File.ReadAllBytes(path);
-                return BytesMatchHashes(bytes, file);
+                // Hash large mods/resource packs as a stream instead of allocating
+                // one array the size of every existing file during update checks.
+                using var stream = File.OpenRead(path);
+                var sha512 = PackFileSystem.NormalizeHex(file.Hashes?.Sha512);
+                var sha1 = PackFileSystem.NormalizeHex(file.Hashes?.Sha1);
+                if (!string.IsNullOrEmpty(sha512))
+                    return string.Equals(PackFileSystem.ComputeHex(SHA512.HashData(stream)), sha512, StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrEmpty(sha1))
+                    return string.Equals(PackFileSystem.ComputeHex(SHA1.HashData(stream)), sha1, StringComparison.OrdinalIgnoreCase);
+                return true;
             }
             catch
             {
@@ -697,85 +700,25 @@ namespace CMUmcl.Content
         // Streaming download to file (with incremental hashing)
         // ------------------------------------------------------------------
 
-        private sealed class DownloadedFile
-        {
-            public string Sha1 { get; init; } = string.Empty;
-            public string Sha256 { get; init; } = string.Empty;
-            public string Sha512 { get; init; } = string.Empty;
-            public long Size { get; init; }
-        }
-
         private async Task<DownloadedFile> DownloadToFileAsync(
-            string url,
-            string targetPath,
-            IProgress<PackInstallProgress>? progress,
-            string stage,
-            CancellationToken ct)
+            string url, string targetPath, IProgress<PackInstallProgress>? progress,
+            string stage, CancellationToken ct, DownloadExpectation expected)
         {
-            HttpResponseMessage response;
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new ResourceException("网络错误，无法下载，请检查网络连接。", ex);
-            }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-            {
-                throw new ResourceException("下载超时，请稍后再试。", ex);
-            }
-
-            using (response)
-            {
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new ResourceException($"下载失败（HTTP {(int)response.StatusCode}）。");
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-
-                using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-                using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                using var sha512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
-
-                await using var contentStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-                // Stream to the final target path directly. A partially-written file on
-                // failure is removed by the caller (and would fail hash checks anyway).
-                await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-
-                var buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = await contentStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-                {
-                    sha1.AppendData(buffer, 0, read);
-                    sha256.AppendData(buffer, 0, read);
-                    sha512.AppendData(buffer, 0, read);
-                    await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                    total += read;
-
-                    progress?.Report(new PackInstallProgress
+                return await ResumableDownload.DownloadAsync(_http, url, targetPath, expected,
+                    (received, total) => progress?.Report(new PackInstallProgress
                     {
-                        Stage = stage,
-                        BytesDownloaded = total,
-                        TotalBytes = response.Content.Headers.ContentLength,
-                        Message = $"已下载 {FormatUtils.FormatBytes(total)}",
-                    });
-                }
-
-                return new DownloadedFile
-                {
-                    Sha1 = PackFileSystem.ComputeHex(sha1.GetHashAndReset()),
-                    Sha256 = PackFileSystem.ComputeHex(sha256.GetHashAndReset()),
-                    Sha512 = PackFileSystem.ComputeHex(sha512.GetHashAndReset()),
-                    Size = total,
-                };
+                        Stage = stage, BytesDownloaded = received, TotalBytes = total,
+                        Message = $"已下载 {FormatUtils.FormatBytes(received)}",
+                    }), ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or OperationCanceledException)
+            {
+                throw new ResourceException("下载或校验失败，已保留有效断点，可稍后重试。", ex);
             }
         }
-
         private static void TryDelete(string path)
         {
             try { File.Delete(path); } catch { /* best effort */ }

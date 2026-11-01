@@ -61,16 +61,17 @@ namespace CMUmcl.Launch
 
         /// <summary>
         /// Fallback mapping used only when the version JSON is unavailable:
-        /// &lt;1.17 → 8; 1.17–1.20.4 → 17; 1.20.5–1.21.8 → 21; ≥1.21.9 → 25.
+        /// &lt;1.17 → 8; 1.17 → 16; 1.18–1.20.4 → 17; 1.20.5–1.21.x → 21; ≥26.1 → 25.
         /// </summary>
         public static int ResolveFallbackMajor(string gameVersion)
         {
             int[] v = ParseVersionSegments(gameVersion);
 
             if (CompareSegments(v, new[] { 1, 17 }) < 0) return 8;      // < 1.17
-            if (CompareSegments(v, new[] { 1, 20, 5 }) < 0) return 17;  // 1.17 – 1.20.4
-            if (CompareSegments(v, new[] { 1, 21, 9 }) < 0) return 21;  // 1.20.5 – 1.21.8
-            return 25;                                                  // ≥ 1.21.9
+            if (CompareSegments(v, new[] { 1, 18 }) < 0) return 16;
+            if (CompareSegments(v, new[] { 1, 20, 5 }) < 0) return 17;
+            if (CompareSegments(v, new[] { 26, 1 }) < 0) return 21;
+            return 25;
         }
 
         private static int ParseMajorVersion(JsonElement jv)

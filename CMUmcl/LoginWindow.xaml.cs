@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using CMUmcl.Auth;
+using CMUmcl.Appearance;
+using CMUmcl.Content;
+using System.Windows.Media;
 
 namespace CMUmcl
 {
@@ -21,9 +24,39 @@ namespace CMUmcl
         public LoginWindow(YggdrasilClient client, AuthStore store)
         {
             InitializeComponent();
+            Appearance.AppearanceManager.TrackWindow(this);
             _client = client;
             _store = store;
+            VersionText.Text = "版本 " + Update.LauncherUpdateClient.CurrentVersion.ToString(3);
+            AppearanceManager.BackgroundChanged += UpdateThemeIcon;
+            Closed += (_, _) => AppearanceManager.BackgroundChanged -= UpdateThemeIcon;
+            Loaded += (_, _) => UsernameBox.Focus();
+            UpdateThemeIcon();
         }
+
+        private void UpdateThemeIcon()
+        {
+            ThemeIcon.Data = (Geometry)FindResource(AppearanceManager.IsDark ? "SunIconGeometry" : "MoonIconGeometry");
+            ThemeToggleButton.ToolTip = AppearanceManager.IsDark ? "切换到亮色模式" : "切换到暗色模式";
+        }
+
+        private async void ToggleTheme_Click(object sender, RoutedEventArgs e)
+        {
+            var store = new SettingsStore();
+            var settings = store.Load();
+            var previous = settings.Theme;
+            settings.Theme = AppearanceManager.IsDark ? LauncherTheme.Light : LauncherTheme.Dark;
+            if (!store.Save(settings))
+            {
+                settings.Theme = previous;
+                SetError("主题设置保存失败，请检查数据目录是否可写。");
+                return;
+            }
+            await AppearanceManager.ApplyAsync(settings);
+        }
+
+        private void Minimize_Click(object sender, RoutedEventArgs e) => SystemCommands.MinimizeWindow(this);
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
         private void UsernameBox_KeyDown(object sender, KeyEventArgs e)
         {

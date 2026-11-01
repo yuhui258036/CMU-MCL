@@ -9,7 +9,7 @@
     <RootNamespace>CMUmcl</RootNamespace>
     <AssemblyName>CMUmcl</AssemblyName>
     <ApplicationIcon>Assets\CMUmcl.ico</ApplicationIcon>
-    <Version>0.1.0</Version>
+    <Version>0.3.1</Version>
     <Authors>CMUmcl</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
     <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
@@ -18,13 +18,13 @@
   <ItemGroup>
     <ProjectReference Include="..\CMUmcl.Updater\CMUmcl.Updater.csproj" ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true" AdditionalProperties="TargetFramework=$(TargetFramework)" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageReference Include="CmlLib.Core" Version="4.1.0" />
     <PackageReference Include="CmlLib.Core.Installer.NeoForge" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Assets\authlib-injector.jar" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Licenses\Lucide.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,6 +45,7 @@
   </Target>
   <Target Name="PublishIndependentUpdater" AfterTargets="Publish">
     <MSBuild Projects="..\CMUmcl.Updater\CMUmcl.Updater.csproj" Targets="Publish"
-             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=$(SelfContained);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)updater\'));PublishSingleFile=false" />
+             RemoveProperties="PublishProfile"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=$(SelfContained);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)updater\'));PublishSingleFile=false;DebugType=$(DebugType);DebugSymbols=$(DebugSymbols);CopyOutputSymbolsToPublishDirectory=$(CopyOutputSymbolsToPublishDirectory)" />
   </Target>
 </Project>

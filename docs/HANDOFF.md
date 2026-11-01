@@ -199,7 +199,9 @@ CMUmcl/
     InstalledStateStore.cs
     LauncherPaths.cs
     VersionCatalogService.cs
-    HttpProxyResolver.cs
+  Network/
+    LauncherProxy.cs
+    ProxyRoutingHandler.cs
   Launch/
     LaunchService.cs
     GameWindowWaiter.cs

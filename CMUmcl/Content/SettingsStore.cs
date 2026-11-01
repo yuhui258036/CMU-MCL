@@ -32,7 +32,7 @@ namespace CMUmcl.Content
                 try
                 {
                     if (!File.Exists(LauncherPaths.SettingsPath))
-                        return CreateDefaults();
+                        return Current = CreateDefaults();
 
                     string json = File.ReadAllText(LauncherPaths.SettingsPath);
                     settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
@@ -80,7 +80,7 @@ namespace CMUmcl.Content
 
         public static AppSettings CreateDefaults()
         {
-            var settings = new AppSettings();
+            var settings = new AppSettings { AutoMemory = true };
             Sanitize(settings);
             return settings;
         }
@@ -88,6 +88,10 @@ namespace CMUmcl.Content
         /// <summary>Restores safe values after a load or before a save.</summary>
         public static void Sanitize(AppSettings settings)
         {
+            if (!Enum.IsDefined(settings.ProxyMode)) settings.ProxyMode = LauncherProxyMode.System;
+            settings.ProxyHost = settings.ProxyHost?.Trim() ?? "";
+            settings.ProxyUsername ??= "";
+            settings.ProxyPasswordProtected ??= "";
             if (settings.JavaPath is string p && string.IsNullOrWhiteSpace(p))
                 settings.JavaPath = null;
 
@@ -98,6 +102,30 @@ namespace CMUmcl.Content
                 settings.VersionIsolation = VersionIsolation.ModdedOnly;
 
             settings.InstancesDirectory = LauncherPaths.NormalizeInstancesDirectory(settings.InstancesDirectory);
+            if (!Enum.IsDefined(settings.Theme)) settings.Theme = LauncherTheme.System;
+            if (!double.IsFinite(settings.BackgroundOpacity)) settings.BackgroundOpacity = 0.25;
+            settings.BackgroundOpacity = Math.Clamp(settings.BackgroundOpacity, 0.05, 1);
+            if (string.IsNullOrWhiteSpace(settings.BackgroundPath)) settings.BackgroundPath = null;
+            else
+            {
+                try { settings.BackgroundPath = Path.IsPathFullyQualified(settings.BackgroundPath)
+                    ? Path.GetFullPath(settings.BackgroundPath) : null; }
+                catch { settings.BackgroundPath = null; }
+            }
+            settings.BackgroundImages ??= [];
+            if (settings.BackgroundMode == null)
+            {
+                settings.BackgroundMode = settings.BackgroundPath == null ? BackgroundKind.Default : BackgroundKind.Local;
+                if (settings.BackgroundPath != null && settings.BackgroundImages.Count == 0)
+                    settings.BackgroundImages.Add(new(settings.BackgroundPath, "背景图片"));
+            }
+            settings.BackgroundPath = null; // One-time migration of the previous single-image setting.
+            if (!Enum.IsDefined(settings.BackgroundMode.Value)) settings.BackgroundMode = BackgroundKind.Default;
+            settings.BackgroundImages = settings.BackgroundImages.Where(i => i != null && !string.IsNullOrWhiteSpace(i.Path) && Path.IsPathFullyQualified(i.Path))
+                .DistinctBy(i => i.Path, StringComparer.OrdinalIgnoreCase).Take(50)
+                .Select(i => i with { Name = string.IsNullOrWhiteSpace(i.Name) ? "背景图片" : i.Name }).ToList();
+            settings.BackgroundUrl = settings.BackgroundUrl?.Trim() ?? "";
+            settings.BackgroundIntervalSeconds = Math.Clamp(settings.BackgroundIntervalSeconds, 10, 3600);
         }
     }
 }

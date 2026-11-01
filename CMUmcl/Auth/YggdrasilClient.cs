@@ -79,10 +79,7 @@ namespace CMUmcl.Auth
 
         public YggdrasilClient()
         {
-            var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            };
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
 
             _http = new HttpClient(handler)
             {

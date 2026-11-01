@@ -50,6 +50,7 @@ internal sealed class AcceptanceApp(string root) : Application
     private readonly List<IDisposable> _services = [];
     private Mutex? _gate;
     private bool _ownsGate;
+    private System.Windows.Threading.DispatcherTimer? _deadline;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -61,7 +62,9 @@ internal sealed class AcceptanceApp(string root) : Application
         settings.Load();
         var auth = new YggdrasilClient();
         var store = new AuthStore(); // Paths point at the new, empty fixture data directory.
-        var manifest = new ResourceManifestClient();
+        var manifest = File.Exists(Path.Combine(root, "live-cdn.marker")) ? new ResourceManifestClient()
+            : new ResourceManifestClient(new FixtureTransport(root), new Uri(ResourceManifestClient.BaseUrl + "/"),
+                File.ReadAllText(Path.Combine(root, "public-key.pem")));
         var installed = new InstalledStateStore();
         var installer = new PackInstaller(installed);
         var launch = new LaunchService(auth, store, installed, settings);
@@ -88,10 +91,17 @@ internal sealed class AcceptanceApp(string root) : Application
             Install = AppContext.BaseDirectory, Utc = DateTimeOffset.UtcNow,
         }) + "\n");
         window.Show();
+        if (int.TryParse(Environment.GetEnvironmentVariable("CMUMCL_UI_FIXTURE_TIMEOUT_SECONDS"), out var seconds) && seconds is >= 30 and <= 1800)
+        {
+            _deadline = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+            _deadline.Tick += (_, _) => { _deadline.Stop(); Shutdown(4); };
+            _deadline.Start();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _deadline?.Stop();
         foreach (var service in _services) service.Dispose();
         if (_ownsGate) _gate!.ReleaseMutex();
         _gate?.Dispose();
@@ -108,7 +118,12 @@ internal sealed class FixtureTransport(string root) : HttpMessageHandler
     {
         var scenario = File.ReadAllText(Path.Combine(root, "scenario.txt")).Trim();
         File.AppendAllText(Path.Combine(root, "requests.jsonl"), JsonSerializer.Serialize(new
-            { Utc = DateTimeOffset.UtcNow, Scenario = scenario, Url = request.RequestUri!.ToString() }) + "\n");
+            { Utc = DateTimeOffset.UtcNow, Scenario = scenario, Url = request.RequestUri!.ToString(), Range = request.Headers.Range?.ToString() }) + "\n");
+        if (request.RequestUri!.ToString() is ResourceManifestClient.BaseUrl + "/manifest.json" or ResourceManifestClient.BaseUrl + "/manifest.json.sig")
+        {
+            var name = request.RequestUri.AbsolutePath.EndsWith(".sig") ? "resource-manifest.json.sig" : "resource-manifest.json";
+            return new(HttpStatusCode.OK) { Content = new ByteArrayContent(await File.ReadAllBytesAsync(Path.Combine(root, name), ct)) };
+        }
         if (request.RequestUri!.ToString() == UpdateProtocol.FeedUrl)
         {
             if (scenario == "offline") return new(HttpStatusCode.ServiceUnavailable);
@@ -124,17 +139,24 @@ internal sealed class FixtureTransport(string root) : HttpMessageHandler
             throw new InvalidOperationException("Unexpected fixture request");
         var package = Path.Combine(root, "package.zip");
         Stream input = File.OpenRead(package);
+        var size = input.Length;
+        var offset = request.Headers.Range?.Ranges.Single().From ?? 0;
+        if (offset < 0 || offset >= size) { input.Dispose(); return new(HttpStatusCode.RequestedRangeNotSatisfiable); }
+        input.Position = offset;
         if (scenario == "slow") input = new ThrottledStream(input);
         var content = new StreamContent(input);
-        content.Headers.ContentLength = new FileInfo(package).Length;
-        return new(HttpStatusCode.OK) { Content = content };
+        content.Headers.ContentLength = size - offset;
+        if (offset > 0) content.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(offset, size - 1, size);
+        var response = new HttpResponseMessage(offset > 0 ? HttpStatusCode.PartialContent : HttpStatusCode.OK) { Content = content };
+        response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"isolated-ui-package\"");
+        return response;
     }
 }
 
 internal sealed class ThrottledStream(Stream inner) : Stream
 {
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
-    { await Task.Delay(60, ct); return await inner.ReadAsync(buffer, ct); }
+    { await Task.Delay(100, ct); return await inner.ReadAsync(buffer[..Math.Min(buffer.Length, 16384)], ct); }
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
         ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
     public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);

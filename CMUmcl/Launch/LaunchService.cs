@@ -46,7 +46,7 @@ namespace CMUmcl.Launch
             _authStore = authStore;
             _installedState = installedState;
             _settingsStore = settingsStore;
-            _http = new HttpClient();
+            _http = new HttpClient(CMUmcl.Network.LauncherProxy.CreateHandler());
         }
 
         public async Task<LaunchResult> LaunchAsync(
@@ -159,7 +159,7 @@ namespace CMUmcl.Launch
                 Session = mSession,
                 Path = prepared.Launcher.MinecraftPath,
                 JavaPath = prepared.Java.JavaPath,
-                MaximumRamMb = Math.Max(512, prepared.Settings.MaxMemoryMb),
+                MaximumRamMb = MemoryAllocation.Resolve(prepared.Settings, prepared.Java, MemorySnapshot.Read()),
                 MinimumRamMb = 512,
                 GameLauncherName = "CMUmcl",
                 GameLauncherVersion = "0.1.0",
@@ -234,7 +234,7 @@ namespace CMUmcl.Launch
 
             // Build shared Minecraft path + launcher.
             var minecraftPath = new MinecraftPath(LauncherPaths.MinecraftDirectory);
-            var launcher = new MinecraftLauncher(minecraftPath);
+            var launcher = new MinecraftLauncher(MinecraftLauncherParameters.CreateDefault(minecraftPath, _http));
 
             string signature = ProvisioningMarker.ComputeSignature(gameVersion, loader, loaderVersion);
 
@@ -303,13 +303,17 @@ namespace CMUmcl.Launch
                 if (java == null || java.Major <= 0)
                     throw new LaunchException("手动指定的 Java 路径无效或无法读取其版本信息。请在设置中检查 Java 路径。");
 
+                if (!java.IsSupportedArchitecture)
+                    throw new LaunchException("所选 Java 架构与当前 Windows 不兼容，请在设置中更换运行时。");
                 if (java.Major < requirement.Major)
                     throw new LaunchException(
-                        $"手动指定的 Java 版本为 {java.Major}，但 Minecraft {gameVersion} 需要 Java {requirement.Major} 或更高版本。请在设置中更换 Java 版本。");
+                        $"手动指定的 Java 版本为 {java.Major}，Minecraft {gameVersion} 至少需要 Java {requirement.Major}。请更换对应版本或使用自动选择。");
+                if (requirement.Major >= 21 && java.Bits == 32)
+                    throw new LaunchException("此游戏版本需要 64 位 Java，请更换运行时。");
             }
             else
             {
-                IReadOnlyList<JavaInfo> javaCandidates = JavaLocator.Scan();
+                IReadOnlyList<JavaInfo> javaCandidates = JavaLocator.Scan(ct);
                 java = JavaLocator.Select(requirement.Major, javaCandidates);
 
                 if (java == null && requirement.Component != null)

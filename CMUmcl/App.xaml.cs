@@ -50,6 +50,8 @@ namespace CMUmcl
             // Load settings and ensure the on-disk layout exists before any service runs.
             _settingsStore = new SettingsStore();
             _settingsStore.Load();
+            Network.LauncherProxy.Initialize();
+            Appearance.AppearanceManager.Initialize(SettingsStore.Current);
             LauncherPaths.EnsureDirectories();
 
             _client = new YggdrasilClient();

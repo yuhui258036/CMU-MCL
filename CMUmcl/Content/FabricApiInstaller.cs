@@ -63,11 +63,7 @@ namespace CMUmcl.Content
 
         public FabricApiInstaller()
         {
-            var handler = new HttpClientHandler
-            {
-                AllowAutoRedirect = true,
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-            };
+            var handler = CMUmcl.Network.LauncherProxy.CreateHandler();
 
             // Mods are usually a few MB, but slow links exist; give the download room.
             _http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };

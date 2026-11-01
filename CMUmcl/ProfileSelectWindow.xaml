@@ -1,12 +1,13 @@
 <Window x:Class="CMUmcl.ProfileSelectWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Foreground="{DynamicResource TextBrush}"
         Title="选择角色"
         Icon="/Assets/CMUmcl.ico"
         Width="360" Height="420"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="{StaticResource BgBrush}"
+        Background="{DynamicResource WindowBackdropBrush}"
         FontFamily="Segoe UI, Microsoft YaHei UI">
     <Grid Margin="24,20">
         <Grid.RowDefinitions>
@@ -16,13 +17,13 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="请选择要使用的角色"
-                   FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
+                   FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
                    Margin="0,0,0,16" />
 
         <ListBox x:Name="ProfileList" Grid.Row="1"
-                 Background="{StaticResource PanelBrush}"
-                 Foreground="{StaticResource TextBrush}"
-                 BorderBrush="{StaticResource PanelBorderBrush}"
+                 Background="{DynamicResource PanelBrush}"
+                 Foreground="{DynamicResource TextBrush}"
+                 BorderBrush="{DynamicResource PanelBorderBrush}"
                  FontSize="14"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  MouseDoubleClick="ProfileList_MouseDoubleClick" />

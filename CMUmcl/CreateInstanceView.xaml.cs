@@ -231,7 +231,7 @@ namespace CMUmcl
             ImportNameBox.Text = string.Empty;
             ImportPathText.Text = "尚未选择文件夹或 .mrpack 文件";
             ImportStatusText.Text = string.Empty;
-            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivTextMuted");
             UpdateImportButton();
 
             RefreshLoaderStepUi();
@@ -336,7 +336,7 @@ namespace CMUmcl
                 ImportNameBox.Text = folderName;
 
             ImportStatusText.Text = string.Empty;
-            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivTextMuted");
             UpdateImportButton();
         }
 
@@ -397,7 +397,7 @@ namespace CMUmcl
                 ImportNameBox.Text = stem;
 
             ImportStatusText.Text = string.Empty;
-            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivTextMuted");
             ShowStep(Step.Import);
             UpdateImportButton();
         }
@@ -499,7 +499,7 @@ namespace CMUmcl
                 return;
 
             ImportStatusText.Text = p.Message;
-            ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+            ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivTextMuted");
         }
 
         private void SetImportBusy(bool busy)
@@ -513,14 +513,14 @@ namespace CMUmcl
             if (busy)
             {
                 ImportStatusText.Text = "正在导入…";
-                ImportStatusText.Foreground = (Brush)FindResource("CivTextMuted");
+                ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivTextMuted");
             }
         }
 
         private void ShowImportError(string message)
         {
             ImportStatusText.Text = message;
-            ImportStatusText.Foreground = (Brush)FindResource("CivDanger");
+            ImportStatusText.SetResourceReference(TextBlock.ForegroundProperty, "CivDanger");
             UpdateImportButton();
         }
 
@@ -738,7 +738,7 @@ namespace CMUmcl
         {
             bool active = _selectedLoader is "fabric" or "quilt";
             FabricApiStatusText.Text = active ? "自动安装 Fabric API" : "不安装";
-            FabricApiStatusText.Foreground = (Brush)FindResource(active ? "CivAccent" : "CivTextMuted");
+            FabricApiStatusText.SetResourceReference(TextBlock.ForegroundProperty, active ? "CivAccent" : "CivTextMuted");
             FabricApiCheckGlyph.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
             FabricApiCard.Opacity = active ? 1.0 : 0.55;
         }
