@@ -9,7 +9,7 @@
     <RootNamespace>CMUmcl</RootNamespace>
     <AssemblyName>CMUmcl</AssemblyName>
     <ApplicationIcon>Assets\CMUmcl.ico</ApplicationIcon>
-    <Version>0.3.48.16</Version><PlatformTarget>x64</PlatformTarget>
+    <Version>0.3.48.17</Version><PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Authors>CMUmcl</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
