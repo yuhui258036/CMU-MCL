@@ -9,7 +9,7 @@ namespace CMUmcl.Auth
 {
     /// <summary>
     /// Persists the authentication session to <c>%LOCALAPPDATA%\CMUmcl\auth.dat</c>,
-    /// encrypted with DPAPI (current user scope). The password is never stored.
+    /// encrypted with DPAPI (current user scope). Password storage is explicit opt-in.
     /// The <c>clientToken</c> is a stable GUID that is generated once and kept
     /// across runs even when the user chooses not to remember their login.
     /// </summary>
@@ -30,6 +30,85 @@ namespace CMUmcl.Auth
         {
             public string ClientToken { get; set; } = string.Empty;
             public AuthSession? Session { get; set; }
+            public StoredCredentials? Credentials { get; set; }
+        }
+
+        private sealed class StoredCredentials
+        {
+            public string Username { get; set; } = string.Empty;
+            public string Password { get; set; } = string.Empty;
+            public string ProfileId { get; set; } = string.Empty;
+            public string Generation { get; set; } = string.Empty;
+        }
+
+        // Kept out of AuthSession, game arguments, diagnostics and public settings.
+        internal sealed class RememberedLogin
+        {
+            internal string Username = string.Empty, Password = string.Empty, ProfileId = string.Empty;
+            internal string Generation = string.Empty, SessionToken = string.Empty, ClientToken = string.Empty;
+        }
+
+        internal bool HasRememberedPassword => LoadRememberedLogin(LoadSession()) != null;
+
+        internal bool SaveLogin(AuthSession session, string username, string password, bool rememberPassword)
+        {
+            lock (Sync)
+            {
+                var data = LoadStoredData() ?? new StoredData();
+                data.ClientToken = string.IsNullOrWhiteSpace(data.ClientToken) ? session.ClientToken : data.ClientToken;
+                data.Session = session;
+                data.Credentials = rememberPassword ? new StoredCredentials
+                {
+                    Username = username, Password = password, ProfileId = session.SelectedProfileId,
+                    Generation = Guid.NewGuid().ToString("N"),
+                } : null;
+                return SaveStoredData(data);
+            }
+        }
+
+        internal RememberedLogin? LoadRememberedLogin(AuthSession? expected)
+        {
+            lock (Sync)
+            {
+                var data = LoadStoredData();
+                var credential = data?.Credentials;
+                if (expected == null || data?.Session == null || credential == null
+                    || string.IsNullOrWhiteSpace(credential.Username) || string.IsNullOrEmpty(credential.Password)
+                    || string.IsNullOrEmpty(credential.Generation)
+                    || !string.Equals(credential.ProfileId, expected.SelectedProfileId, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(data.Session.SelectedProfileId, expected.SelectedProfileId, StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return new RememberedLogin
+                {
+                    Username = credential.Username, Password = credential.Password, ProfileId = credential.ProfileId,
+                    Generation = credential.Generation, SessionToken = data.Session.AccessToken, ClientToken = data.Session.ClientToken,
+                };
+            }
+        }
+
+        internal bool TrySaveAutomaticLogin(RememberedLogin expected, AuthSession updated)
+        {
+            lock (Sync)
+            {
+                var data = LoadStoredData();
+                if (data?.Credentials?.Generation != expected.Generation || data.Session?.AccessToken != expected.SessionToken
+                    || !string.Equals(updated.SelectedProfileId, expected.ProfileId, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                data.Session = updated;
+                SaveStoredData(data);
+                return true;
+            }
+        }
+
+        internal void ForgetRejectedPassword(RememberedLogin expected)
+        {
+            lock (Sync)
+            {
+                var data = LoadStoredData();
+                if (data?.Credentials?.Generation != expected.Generation) return;
+                data.Credentials = null;
+                SaveStoredData(data);
+            }
         }
 
         /// <summary>Gets the persisted client token, or creates and persists a new stable GUID if missing.</summary>
@@ -66,18 +145,23 @@ namespace CMUmcl.Auth
                 var data = LoadStoredData() ?? new StoredData();
                 data.ClientToken = string.IsNullOrWhiteSpace(data.ClientToken) ? session.ClientToken : data.ClientToken;
                 data.Session = session;
+                if (data.Credentials != null && !string.Equals(data.Credentials.ProfileId, session.SelectedProfileId, StringComparison.OrdinalIgnoreCase))
+                    data.Credentials = null;
                 SaveStoredData(data);
             }
         }
 
         /// <summary>Clears any saved session while preserving the stable client token.</summary>
-        public void ClearSession()
+        public void ClearSession() => TryClearSession();
+
+        internal bool TryClearSession()
         {
             lock (Sync)
             {
                 var data = LoadStoredData() ?? new StoredData();
                 data.Session = null;
-                SaveStoredData(data);
+                data.Credentials = null;
+                return SaveStoredData(data);
             }
         }
 
@@ -130,20 +214,27 @@ namespace CMUmcl.Auth
             }
         }
 
-        private static void SaveStoredData(StoredData data)
+        private static bool SaveStoredData(StoredData data)
         {
+            string? temporary = null;
             try
             {
                 Directory.CreateDirectory(DirectoryPath);
                 string json = JsonSerializer.Serialize(data, JsonOptions);
                 byte[] plainBytes = Encoding.UTF8.GetBytes(json);
                 byte[] protectedBytes = ProtectedData.Protect(plainBytes, null, DataProtectionScope.CurrentUser);
-                File.WriteAllBytes(FilePath, protectedBytes);
+                temporary = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllBytes(temporary, protectedBytes);
+                if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null);
+                else File.Move(temporary, FilePath);
+                return true;
             }
             catch
             {
                 // Failing to persist is non-fatal; the in-memory session still works for this run.
+                return false;
             }
+            finally { try { if (temporary != null && File.Exists(temporary)) File.Delete(temporary); } catch { } }
         }
     }
 }

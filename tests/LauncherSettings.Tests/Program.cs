@@ -128,7 +128,7 @@ internal static partial class Program
         Check(fixtureCards.Any(c=>ReferenceEquals(c.IconSource,packIconBitmap)&&c.HasIcon),"server pack icon_url loads into the card");
         Check(fixtureCards.Any(c=>c.IsRequired),"server required flag is exposed by the card view model");
         Check(Descendants(Get<ItemsControl>(window,"CardsList")).OfType<TextBlock>().Any(x=>x.Text=="\u5FC5\u9700"),"required chip is rendered in the pack card");
-        if(Environment.GetCommandLineArgs().Contains("--auth-recovery")){await AuthRecoveryChecks(window);window.Close();return;}
+        if(Environment.GetCommandLineArgs().Contains("--auth-recovery")){await RememberPasswordUiChecks();await AuthRecoveryChecks(window);window.Close();return;}
         await LauncherUpdatePopupChecks(window);
         bool netOffline=Environment.GetCommandLineArgs().Contains("--net-offline");
         if(preview && (netOffline || Environment.GetCommandLineArgs().Contains("--skin-offline")))

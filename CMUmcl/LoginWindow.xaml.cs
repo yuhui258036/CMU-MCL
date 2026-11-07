@@ -20,6 +20,7 @@ namespace CMUmcl
 
         /// <summary>True when the user should persist the session across runs.</summary>
         public bool RememberLogin => RememberBox.IsChecked == true;
+        internal bool RememberPassword => RememberLogin && RememberPasswordBox.IsChecked == true;
 
         public LoginWindow(YggdrasilClient client, AuthStore store)
         {
@@ -27,6 +28,8 @@ namespace CMUmcl
             Appearance.AppearanceManager.TrackWindow(this);
             _client = client;
             _store = store;
+            RememberPasswordBox.IsChecked = store.HasRememberedPassword;
+            UsernameBox.Text = store.LoadSession()?.Username ?? string.Empty;
             VersionText.Text = "版本 " + Update.LauncherUpdateClient.CurrentVersion.ToString(3);
             AppearanceManager.BackgroundChanged += UpdateThemeIcon;
             Closed += (_, _) => AppearanceManager.BackgroundChanged -= UpdateThemeIcon;
@@ -143,11 +146,13 @@ namespace CMUmcl
 
                 if (RememberLogin)
                 {
-                    _store.SaveSession(session);
+                    if (!_store.SaveLogin(session, username, password, RememberPassword))
+                        throw new YggdrasilException("无法保存登录选项，请检查数据目录权限后重试。");
                 }
                 else
                 {
-                    _store.ClearSession();
+                    if (!_store.TryClearSession())
+                        throw new YggdrasilException("无法清除已保存的登录信息，请检查数据目录权限后重试。");
                 }
 
                 ResultSession = session;
@@ -168,6 +173,11 @@ namespace CMUmcl
         }
 
         private bool _busy;
+
+        private void RememberLogin_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (RememberPasswordBox != null) RememberPasswordBox.IsChecked = false;
+        }
 
         private void SetBusy(bool busy)
         {

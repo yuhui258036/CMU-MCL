@@ -5,7 +5,7 @@ namespace CMUmcl.Auth
 {
     /// <summary>
     /// A persisted or in-memory authentication session for the CSU-MC Yggdrasil skin site.
-    /// The password is never stored here or anywhere else.
+    /// Optional remembered credentials are kept separately in the DPAPI-protected AuthStore.
     /// </summary>
     public sealed class AuthSession
     {

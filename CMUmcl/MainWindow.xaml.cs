@@ -903,7 +903,11 @@ namespace CMUmcl
             if (_updatingLauncher) return;
             // Resolve pending game defaults first so a cancelled prompt leaves the session intact.
             if (!await ResolveUnsavedGameDefaultsAsync("退出登录") || _windowClosed) return;
-            _store.ClearSession();
+            if (!_store.TryClearSession())
+            {
+                LauncherPrompt.Show(this, "无法清除已保存的登录信息，请检查数据目录权限后重试。", "退出登录失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             LogoutRequested?.Invoke();
             _closingAfterFlush = true;
             Close();

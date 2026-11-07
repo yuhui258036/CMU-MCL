@@ -91,7 +91,7 @@ namespace CMUmcl.Auth
 
         private readonly HttpClient _http;
 
-        public YggdrasilClient() : this(CMUmcl.Network.LauncherProxy.CreateHandler()) { }
+        public YggdrasilClient() : this(CMUmcl.Network.LauncherProxy.CreateHandler(allowAutoRedirect: false)) { }
 
         internal YggdrasilClient(HttpMessageHandler handler)
         {
