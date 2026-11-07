@@ -175,8 +175,8 @@ namespace CMUmcl.Auth
                     || data.Session.ClientToken != expected.ClientToken)
                     return false;
                 data.Session = null;
-                SaveStoredData(data);
-                return true;
+                data.Credentials = null;
+                return SaveStoredData(data);
             }
         }
 

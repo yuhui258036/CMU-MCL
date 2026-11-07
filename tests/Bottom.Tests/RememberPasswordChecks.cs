@@ -27,6 +27,10 @@ internal static partial class Program
                 "logout forgets password and session while preserving stable client token");
             Check(!store.TrySaveAutomaticLogin(loaded!, AuthFixture("new")), "late automatic login cannot restore a logged-out account");
 
+            Remember(); var newer = AuthFixture("newer-login"); store.SaveLogin(newer,username,password,true);
+            Check(!store.TryClearSession(old) && store.HasRememberedPassword, "late startup rejection cannot clear credentials of a newer login");
+            Check(store.TryClearSession(newer) && !store.HasRememberedPassword, "startup conditional session removal clears the matching remembered password too");
+
             Remember(); store.SaveLogin(old, username, password, false);
             Check(!store.HasRememberedPassword, "unchecking remember-password removes previously saved password");
             var other = AuthFixture("other"); other.SelectedProfileId = new string('b',32);
@@ -199,6 +203,7 @@ internal static partial class Program
                 Check(!store.SaveLogin(old,username,password,false) && File.ReadAllBytes(authPath).SequenceEqual(protectedBefore),
                     "failed credential opt-out reports persistence failure and preserves intact encrypted store");
                 Check(!store.TryClearSession(), "logout reports inability to erase saved credentials instead of claiming success");
+                Check(!store.TryClearSession(old), "conditional startup clearing also reports persistence failure");
                 authentications = 0;
                 using var client = new YggdrasilClient(new AuthHandler((path,body,ct) =>
                 {

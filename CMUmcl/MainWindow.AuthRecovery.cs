@@ -12,6 +12,7 @@ namespace CMUmcl
     {
         internal Func<Task<AuthSession?>>? ReauthenticateForLaunch { get; set; }
         private Task<AuthSession?>? _reauthentication;
+        private bool _startupLoginPromptActive;
 
         // A failed refresh can require credentials, rather than another refresh.
         // Recover once and resume the original instance; network failures do not
@@ -55,13 +56,17 @@ namespace CMUmcl
         /// "this login is no longer valid" asks for credentials; an unreachable skin site keeps
         /// the session, and the launch path validates it again before starting a game.
         /// </summary>
-        internal async Task VerifyRestoredSessionAsync(Func<AuthSession, Task<AuthSession>> validate)
+        internal Task VerifyRestoredSessionAsync(Func<AuthSession, Task<AuthSession>> validate)
+            => VerifyRestoredSessionAsync((session, _) => validate(session));
+
+        internal async Task VerifyRestoredSessionAsync(Func<AuthSession, CancellationToken, Task<AuthSession>> validate)
         {
+            var ct = _updateLifetime.Token;
             var original = _session;
             SetAccountState("正在确认…");
             try
             {
-                var verified = await validate(original);
+                var verified = await validate(original, ct);
                 if (_windowClosed || !ReferenceEquals(_session, original)) return;
                 _session = verified;
                 if (verified.SelectedProfileName != AccountNameText.Text) AccountNameText.Text = verified.SelectedProfileName;
@@ -73,17 +78,34 @@ namespace CMUmcl
                 // The next start goes straight to the login window instead of repeating this.
                 _store.TryClearSession(original);
                 SetAccountState("登录已失效");
-                var choice = await ShowInlinePromptAsync("登录已失效",
-                    "保存的登录已过期或已在其他地方退出：" + ex.Message + "\n现在重新登录吗？也可以稍后再登录，启动游戏时会再次提示。", "重新登录");
+                if (_reauthentication != null)
+                {
+                    await WaitForLaunchLoginAsync(_reauthentication, ct);
+                    return;
+                }
+                InlineChoice choice;
+                _startupLoginPromptActive = true;
+                try
+                {
+                    choice = await ShowInlinePromptAsync("登录已失效",
+                        "保存的登录已过期或已在其他地方退出：" + ex.Message + "\n现在重新登录吗？也可以稍后再登录，启动游戏时会再次提示。", "重新登录");
+                }
+                finally { _startupLoginPromptActive = false; }
                 if (choice != InlineChoice.Continue || _windowClosed || !ReferenceEquals(_session, original) || ReauthenticateForLaunch == null) return;
                 _reauthentication ??= PromptForLaunchLoginAsync();
                 if (await _reauthentication != null) SetAccountState("已登录");
+            }
+            catch (OperationCanceledException ex) when (ct.IsCancellationRequested || _windowClosed || ex is not TaskCanceledException)
+            {
+                // A cancelled/obsolete background verification is not a connectivity failure.
             }
             catch (Exception ex) when (ex is YggdrasilException || ex is System.Net.Http.HttpRequestException || ex is TaskCanceledException)
             {
                 if (_windowClosed || !ReferenceEquals(_session, original)) return;
                 // Only blame the skin site once the rest of the internet is known to work.
-                var problem = await ConnectionDiagnosis.DiagnoseAsync(ex);
+                ConnectionProblem problem;
+                try { problem = await ConnectionDiagnosis.DiagnoseAsync(ex, ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested || _windowClosed) { return; }
                 if (_windowClosed || !ReferenceEquals(_session, original)) return;
                 ShowConnectionProblem(problem, ex.Message);
             }
@@ -177,6 +199,7 @@ namespace CMUmcl
             try
             {
                 if (_windowClosed) return null;
+                if (_startupLoginPromptActive) CancelInlinePrompt();
                 var restored = await ReauthenticateForLaunch!();
                 if (restored != null && !_windowClosed)
                 {

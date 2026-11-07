@@ -148,7 +148,7 @@ namespace CMUmcl
 
             MainWindow = main;
             main.Show();
-            if (!verified) _ = main.VerifyRestoredSessionAsync(saved => _launchService!.EnsureValidSessionAsync(saved));
+            if (!verified) _ = main.VerifyRestoredSessionAsync((saved, ct) => _launchService!.EnsureValidSessionAsync(saved, ct));
         }
 
         protected override void OnExit(ExitEventArgs e)
