@@ -48,7 +48,7 @@ internal static partial class Program
                 var parent = vm.Detail!;
                 await vm.OpenVersionAsync(parent.Versions.Single(v => v.Id == version.Id));
                 Check(parent.HasDependencies && parent.Dependencies.Any(d => d.Reference.Kind == DependencyKind.Required), "dependencies UI: selected version displays required dependencies " + source);
-                Check(parent.DependencyNotice.Contains("只安装当前模组") && parent.DependencyNotice.Contains("另行"), "dependencies UI: parent-only download behavior is explicit");
+                Check(parent.DependencyNotice.Contains("必需前置") && parent.DependencyNotice.Contains("另行安装"), "dependencies UI: required dependencies need separate installation");
                 var sodium = parent.Dependencies.First(d => d.Reference.Kind == DependencyKind.Required && d.Title.IndexOf("sodium", StringComparison.OrdinalIgnoreCase) >= 0);
                 Check(sodium.CanOpen && !sodium.HasError, "dependencies UI: required Sodium metadata resolves " + source);
                 if (!live)

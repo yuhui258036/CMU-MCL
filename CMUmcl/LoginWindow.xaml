@@ -54,7 +54,7 @@
      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
       <StackPanel>
        <TextBlock Text="登录" FontSize="26" FontWeight="SemiBold" />
-       <TextBlock Text="使用你的 CSU-MC 皮肤站账号继续" Margin="0,6,0,24" FontSize="13" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
+       <TextBlock Text="使用 CSU-MC 皮肤站账号登录" Margin="0,6,0,24" FontSize="13" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
        <Label Content="用户名 / 邮箱" Target="{Binding ElementName=UsernameBox}" Style="{StaticResource FieldLabel}" />
        <TextBox x:Name="UsernameBox" Height="42" Margin="0,0,0,16" FontSize="14" AutomationProperties.Name="用户名或邮箱" KeyDown="UsernameBox_KeyDown" />
        <Label Content="密码" Target="{Binding ElementName=PasswordBox}" Style="{StaticResource FieldLabel}" />

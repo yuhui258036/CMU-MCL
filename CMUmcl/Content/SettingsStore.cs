@@ -89,6 +89,7 @@ namespace CMUmcl.Content
         public static void Sanitize(AppSettings settings)
         {
             if (!Enum.IsDefined(settings.ProxyMode.GetType(), settings.ProxyMode)) settings.ProxyMode = LauncherProxyMode.System;
+            if (!Enum.IsDefined(typeof(AfterLaunchAction), settings.AfterLaunch)) settings.AfterLaunch = AfterLaunchAction.Keep;
             settings.ProxyHost = settings.ProxyHost?.Trim() ?? "";
             settings.ProxyUsername ??= "";
             settings.ProxyPasswordProtected ??= "";

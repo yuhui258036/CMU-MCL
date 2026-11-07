@@ -70,6 +70,20 @@ internal sealed class InstanceContentFiles
         catch { /* Broken/unknown metadata must not hide an otherwise manageable file. */ }
         return item;
     }
+    /// <summary>Fabric/Quilt mod id and version from fabric.mod.json, or null for other files.</summary>
+    internal static (string Id,string Version)? ReadFabricModId(string jar)
+    {
+        try
+        {
+            using var zip=ZipFile.OpenRead(jar);
+            var entry=zip.GetEntry("fabric.mod.json");if(entry==null||entry.Length>256*1024)return null;
+            using var stream=entry.Open();using var json=JsonDocument.Parse(stream);var data=json.RootElement;
+            string id=data.TryGetProperty("id",out var i)&&i.ValueKind==JsonValueKind.String?i.GetString()??"":"";
+            string version=data.TryGetProperty("version",out var v)&&v.ValueKind==JsonValueKind.String?v.GetString()??"":"";
+            return id.Length==0?null:(id,version);
+        }
+        catch{return null;}
+    }
     internal static BitmapSource? ReadPackIcon(string path)
     {
         const int limit=2*1024*1024;

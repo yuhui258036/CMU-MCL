@@ -401,12 +401,8 @@
                                 MaxWidth="680" Margin="40">
                     <TextBlock Text="创建实例" FontSize="30" FontWeight="SemiBold"
                                Foreground="{DynamicResource CivText}" HorizontalAlignment="Center" />
-                    <TextBlock Text="实例是带有特定加载器、游戏版本和模组的一套 Minecraft 配置。"
-                               FontSize="14" Foreground="{DynamicResource CivTextMuted}"
-                               HorizontalAlignment="Center" Margin="0,10,0,32"
-                               TextAlignment="Center" TextWrapping="Wrap" />
 
-                    <WrapPanel HorizontalAlignment="Center" MaxWidth="620">
+                    <WrapPanel HorizontalAlignment="Center" MaxWidth="620" Margin="0,24,0,0">
                         <Button Style="{StaticResource CivLandingCard}"
                                 Margin="5" Click="LandingNewButton_Click">
                             <StackPanel HorizontalAlignment="Stretch">
@@ -415,7 +411,7 @@
                                 <TextBlock Text="全新创建" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource CivText}" HorizontalAlignment="Center"
                                            Margin="0,14,0,0" />
-                                <TextBlock Text="选择游戏版本与加载器，创建全新实例" FontSize="12"
+                                <TextBlock Text="选择游戏版本与加载器" FontSize="12"
                                            Foreground="{DynamicResource CivTextMuted}" HorizontalAlignment="Center"
                                            Margin="0,6,0,0" MaxWidth="252" TextWrapping="Wrap" TextAlignment="Center" />
                             </StackPanel>
@@ -429,7 +425,7 @@
                                 <TextBlock Text="导入已有" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource CivText}" HorizontalAlignment="Center"
                                            Margin="0,14,0,0" />
-                                <TextBlock Text="选择已有的实例文件夹，完整保留文件并导入" FontSize="12"
+                                <TextBlock Text="从文件夹或整合包导入" FontSize="12"
                                            Foreground="{DynamicResource CivTextMuted}" HorizontalAlignment="Center"
                                            Margin="0,6,0,0" MaxWidth="252" TextWrapping="Wrap" TextAlignment="Center" />
                             </StackPanel>
@@ -459,7 +455,7 @@
                         <TextBlock Text="导入已有实例" FontSize="22" FontWeight="SemiBold"
                                    Foreground="{DynamicResource CivText}" HorizontalAlignment="Center"
                                    Margin="0,16,0,0" />
-                        <TextBlock Text="选择已有的实例文件夹（或 .minecraft 目录）或 Modrinth 整合包（.mrpack），导入到实例库。原文件不会被修改。"
+                        <TextBlock Text="支持实例文件夹、.minecraft 和 .mrpack 整合包。"
                                    FontSize="13" Foreground="{DynamicResource CivTextMuted}"
                                    HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
                                    Margin="0,10,0,24" />
@@ -513,7 +509,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="ImportHintText" Grid.Column="0"
-                                   Text="原文件不会被修改；导入后可在实例库中启动。"
+                                   Text="原文件不会被修改。"
                                    Foreground="{DynamicResource CivTextMuted}" FontSize="12"
                                    VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0" />
                         <Button x:Name="ImportButton" Grid.Column="1" Content="导入" MinWidth="140"

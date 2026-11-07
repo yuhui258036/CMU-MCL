@@ -5,6 +5,8 @@ namespace CMUmcl.Content
     public enum LauncherTheme { System, Light, Dark }
     public enum BackgroundKind { Default, Local, Network }
     public enum LauncherProxyMode { System, Direct, Http, Socks5 }
+    /// <summary>What the launcher window does once a game window has appeared.</summary>
+    public enum AfterLaunchAction { Keep, Minimize, Close }
     public sealed record BackgroundImageEntry(string Path, string Name);
     /// <summary>How instances choose their game directory relative to shared storage.</summary>
     public enum VersionIsolation
@@ -84,6 +86,9 @@ namespace CMUmcl.Content
         /// Explicit directory where installed instances live. Null/empty means the default
         /// (<c>%LOCALAPPDATA%\CMUmcl\instances</c>). Sanitized to an absolute path on load/save.
         /// </summary>
+        [JsonPropertyName("afterLaunch")]
+        public AfterLaunchAction AfterLaunch { get; set; } = AfterLaunchAction.Keep;
+
         [JsonPropertyName("instancesDirectory")]
         public string? InstancesDirectory { get; set; }
     }

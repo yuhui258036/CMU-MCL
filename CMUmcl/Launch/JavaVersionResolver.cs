@@ -74,6 +74,17 @@ namespace CMUmcl.Launch
             return 25;
         }
 
+        /// <summary>
+        /// Highest Java major a loader can run on, or null when there is no known ceiling.
+        /// Forge before 1.13 boots through LaunchWrapper, which fails on Java 9+.
+        /// </summary>
+        public static int? ResolveMaximumMajor(string gameVersion, string? loader)
+        {
+            if (!string.Equals((loader ?? "").Trim(), "forge", StringComparison.OrdinalIgnoreCase)) return null;
+            int[] v = ParseVersionSegments(gameVersion);
+            return v.Length > 0 && CompareSegments(v, new[] { 1, 13 }) < 0 ? 8 : null;
+        }
+
         private static int ParseMajorVersion(JsonElement jv)
         {
             if (jv.ValueKind != JsonValueKind.Object)

@@ -115,6 +115,17 @@ namespace CMUmcl.Content
             }
         }
 
+        /// <summary>Forgets one instance. Returns false when the record could not be saved.</summary>
+        public bool RemoveRecord(string id)
+        {
+            lock (FileLock)
+            {
+                var state = Load();
+                if (!state.Instances.Remove(id)) return true;
+                return Save(state);
+            }
+        }
+
         /// <summary>Backward-compatible helper: sets only the revision, preserving any recorded path/name.</summary>
         public void SetInstalledRevision(string id, int revision)
         {

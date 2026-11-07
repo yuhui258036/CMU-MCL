@@ -81,6 +81,21 @@ namespace CMUmcl.Auth
             }
         }
 
+        /// <summary>Clears the saved session only if it is still <paramref name="expected"/>.</summary>
+        internal bool TryClearSession(AuthSession expected)
+        {
+            lock (Sync)
+            {
+                var data = LoadStoredData();
+                if (data?.Session == null || data.Session.AccessToken != expected.AccessToken
+                    || data.Session.ClientToken != expected.ClientToken)
+                    return false;
+                data.Session = null;
+                SaveStoredData(data);
+                return true;
+            }
+        }
+
         internal bool TryReplaceSession(AuthSession expected, AuthSession updated)
         {
             lock (Sync)

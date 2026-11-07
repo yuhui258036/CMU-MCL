@@ -55,6 +55,9 @@ Check(CMUmcl.Community.CommunityHosts.ResourceCdn.Contains("csumcl.mcapcs.cn") &
       CMUmcl.Community.CommunityHosts.TryGetHttpsHost("https://csumcl.mcapcs.cn/icons/" + new string('a', 64) + ".png", out var iconHost) &&
       iconHost == "csumcl.mcapcs.cn", "server pack icon host is allowlisted for HTTPS loading");
 await ResumeTests.Run(Check);
+await FullInstallCleanupTests.Run(Check);
+await LauncherFeatureTests.Run(Check);
+await FeedbackFixTests.Run(Check);
 await UpdateFeedTests.Run(Check);
 await UpdateStageTests.Run(Check);
 if(args.Length!=0) throw new ArgumentException("No backend operations in this isolated suite");

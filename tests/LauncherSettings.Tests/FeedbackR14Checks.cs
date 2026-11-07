@@ -34,18 +34,15 @@ internal static partial class Program
         var download=new TaskCompletionSource<bool>();create.ProvisionOverride=async (_,_,ct)=>{await download.Task;ct.ThrowIfCancellationRequested();};var installing=CallAsync(create,"InstallAsync");await Until(()=>create.HasActiveOperation);
         Click(window,"InstancesNavButton");var editor=Open();
         Check(Application.Current.Windows.Count==windows && Window.GetWindow(editor)==window && editor.IsVisible,"embedded: settings is a UserControl in main window with no extra window");
-        EditorField<TextBox>(editor,"_name").Text="下载时保存 B";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);
-        Check(editor.HasUnsavedChanges && Get<Button>(window,"InlinePromptDiscard").IsVisible,"embedded: back with unsaved edits offers save/discard/cancel");
-        Click(window,"InlinePromptCancel");await Task.Delay(20);Check(!editor.IsClosed && host.IsVisible,"embedded: cancel back retains editor and edits");
-        EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"InlinePromptContinue");await Until(()=>editor.IsClosed);
-        Check(editor.Saved && InstanceOptionsStore.Load(directory).Name=="下载时保存 B" && !installing.IsCompleted,"embedded: save on back persists B while A keeps downloading");
-        editor=Open();EditorField<TextBox>(editor,"_name").Text="不保存的名字";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"InlinePromptDiscard");await Until(()=>editor.IsClosed);
-        Check(InstanceOptionsStore.Load(directory).Name=="下载时保存 B","embedded: discard on back preserves saved settings");
-        editor=Open();EditorField<TextBox>(editor,"_name").Text="切页丢弃";Click(window,"CommunityNavButton");
-        Check(editor.IsClosed && host.Visibility==Visibility.Collapsed && Get<Grid>(window,"InlinePromptOverlay").Visibility==Visibility.Collapsed && InstanceOptionsStore.Load(directory).Name=="下载时保存 B","embedded: navigating away closes editor immediately without saving or prompt");
+        EditorField<TextBox>(editor,"_name").Text="下载时保存 B";await Until(()=>InstanceOptionsStore.Load(directory).Name=="下载时保存 B",3000);
+        Check(!editor.HasUnsavedChanges && EditorField<TextBlock>(editor,"_status").Text=="已自动保存。" && !installing.IsCompleted && Descendants(editor).OfType<Button>().All(x=>!Equals(x.Content,"保存")),"embedded: edits save automatically without a save button while A keeps downloading");
+        EditorField<TextBox>(editor,"_name").Text="返回时保存";EditorBack(editor);await Until(()=>editor.IsClosed);
+        Check(!Get<Grid>(window,"InlinePromptOverlay").IsVisible && InstanceOptionsStore.Load(directory).Name=="返回时保存","embedded: back saves a pending edit without asking");
+        editor=Open();EditorField<TextBox>(editor,"_name").Text="切页保存";Click(window,"CommunityNavButton");
+        Check(editor.IsClosed && host.Visibility==Visibility.Collapsed && Get<Grid>(window,"InlinePromptOverlay").Visibility==Visibility.Collapsed && InstanceOptionsStore.Load(directory).Name=="切页保存","embedded: navigating away saves pending edits and closes without a prompt");
         Check(Get<UserControl>(window,"CommunityResourceView").IsVisible && Get<ScrollViewer>(window,"InstancesScroll").Visibility==Visibility.Collapsed && Get<TextBlock>(window,"HeaderStatusText").Text.StartsWith("搜索"),"embedded: editor closure does not overlay instances or replace community header");
-        Click(window,"InstancesNavButton");editor=Open();EditorField<TextBox>(editor,"_name").Text="过期保存";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"PacksNavButton");await Task.Delay(20);
-        Check(editor.IsClosed && !Get<Grid>(window,"InlinePromptOverlay").IsVisible && InstanceOptionsStore.Load(directory).Name=="下载时保存 B","embedded: navigation cancels pending unsaved confirmation without late save");
+        Click(window,"InstancesNavButton");editor=Open();EditorField<CheckBox>(editor,"_sizeOverride").IsChecked=true;EditorField<TextBox>(editor,"_width").Text="invalid";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"PacksNavButton");await Task.Delay(20);
+        Check(editor.IsClosed && !Get<Grid>(window,"InlinePromptOverlay").IsVisible && !InstanceOptionsStore.UsesOverride(InstanceOptionsStore.Load(directory),"windowSize"),"embedded: navigation cancels a pending discard confirmation without writing the invalid edit");
         download.SetResult(true);await installing;create.ProvisionOverride=null;create.Close();
         Click(window,"InstancesNavButton");editor=Open();EditorField<TextBox>(editor,"_name").Text="保留父页草稿";
         Descendants(editor).OfType<Button>().Single(x=>Equals(x.Content,"编辑全局默认")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -57,8 +54,11 @@ internal static partial class Program
         Check(!window.CanInstallPack(card.InstanceId),"embedded: maintenance blocks same-instance pack replacement");
         Click(window,"CommunityNavButton");Check(editor.IsClosed && !host.IsVisible,"embedded: navigating during maintenance immediately removes editor");await pending;
         Check(!editor.MaintenanceBusy && window.CanInstallPack(card.InstanceId),"embedded: closed editor cancels operation and releases maintenance guard");
-        Click(window,"InstancesNavButton");editor=Open();EditorField<CheckBox>(editor,"_windowOverride").IsChecked=true;EditorField<TextBox>(editor,"_width").Text="invalid";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"InlinePromptContinue");await Task.Delay(30);
-        Check(!editor.IsClosed && EditorField<TextBlock>(editor,"_status").Text.Contains("窗口"),"embedded: invalid save stays on editor and reports validation");Click(window,"InstancesNavButton");
+        Click(window,"InstancesNavButton");editor=Open();EditorField<CheckBox>(editor,"_sizeOverride").IsChecked=true;EditorField<TextBox>(editor,"_width").Text="invalid";EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);
+        Check(!editor.IsClosed && EditorField<TextBlock>(editor,"_status").Text.Contains("窗口"),"embedded: invalid edit is reported and back asks before discarding it");
+        Click(window,"InlinePromptCancel");await Task.Delay(20);Check(!editor.IsClosed && editor.HasUnsavedChanges,"embedded: cancelling keeps the invalid edit for correction");
+        EditorBack(editor);await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);Click(window,"InlinePromptContinue");await Until(()=>editor.IsClosed);
+        Check(!InstanceOptionsStore.UsesOverride(InstanceOptionsStore.Load(directory),"windowSize"),"embedded: discarded invalid edit is never written");Click(window,"InstancesNavButton");
         var calls=0;window._launchOverride=async (_,ct)=>{calls++;await Task.Delay(Timeout.Infinite,ct);throw new Exception("unreachable");};var starting=CallAsync(window,"LaunchInstanceAsync",card);await Until(()=>card.HasLaunchAction);
         await CallAsync(window,"LaunchInstanceAsync",card);Check(calls==1,"embedded: duplicate launch remains blocked");Call(window,"LaunchAction_Click",new Button{DataContext=card},new RoutedEventArgs());await starting;Check(card.ButtonEnabled && !card.HasLaunchAction,"embedded: cancel-start still restores launch button");
         using(var owned=StartProcessFixture())using(var unrelated=StartProcessFixture())
@@ -89,9 +89,31 @@ internal static partial class Program
         foreach(double scale in new[]{1d,1.25d,1.5d,2d})
         {
             host.LayoutTransform=new ScaleTransform(scale,scale);window.UpdateLayout();await Task.Delay(20);
-            var save=Descendants(editor).OfType<Button>().Single(x=>Equals(x.Content,"保存"));var bounds=save.TransformToAncestor(root).TransformBounds(new Rect(save.RenderSize));Check(bounds.Right<=root.ActualWidth+1 && bounds.Bottom<=root.ActualHeight+1 && save.ActualHeight>0,"embedded: save remains in main content at scale "+scale);
+            var back=Descendants(editor).OfType<Button>().Single(x=>Equals(x.Content,"← 返回"));var bounds=back.TransformToAncestor(root).TransformBounds(new Rect(back.RenderSize));Check(bounds.Right<=root.ActualWidth+1 && bounds.Bottom<=root.ActualHeight+1 && back.ActualHeight>0,"embedded: back action remains in main content at scale "+scale);
         }
         host.LayoutTransform=Transform.Identity;window.UpdateLayout();Screenshot(window,"embedded-settings.png");Click(window,"InstancesNavButton");
+        // Deleting an instance from its management page.
+        string doomed=Path.Combine(LauncherPaths.InstancesDirectory,"embedded-delete");Directory.CreateDirectory(Path.Combine(doomed,"saves"));
+        File.WriteAllText(Path.Combine(doomed,"instance.json"),JsonSerializer.Serialize(new InstanceMetadata{Id="local:embedded-delete",Name="待删除实例",Game="1.21.1",Loader="fabric",LoaderVersion="0.16.10"}));
+        installed.RecordInstall("local:embedded-delete",1,"embedded-delete","待删除实例");
+        string recycled=Path.Combine(_output,"recycled-instance");InstanceRemoval.RecycleOverride=path=>Directory.Move(path,recycled);
+        try
+        {
+            Click(window,"InstancesNavButton");Call(window,"RefreshInstances");window.UpdateLayout();
+            var doomedCard=Get<ItemsControl>(window,"InstancesList").Items.OfType<InstanceCardViewModel>().Single(x=>x.InstanceId=="local:embedded-delete");
+            Call(window,"InstanceSettings_Click",new Button{DataContext=doomedCard},new RoutedEventArgs());window.UpdateLayout();
+            var doomedEditor=(InstanceSettingsView)host.Content;
+            Descendants(doomedEditor).OfType<ListBox>().First().SelectedIndex=6;window.UpdateLayout();
+            var deleteButton=Descendants(doomedEditor).OfType<Button>().Single(x=>Equals(x.Content,"删除实例"));
+            Check(deleteButton.IsVisible,"delete: instance management offers deletion");
+            deleteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Until(()=>Get<Grid>(window,"InlinePromptOverlay").IsVisible);
+            Check(Get<TextBlock>(window,"InlinePromptMessage").Text.Contains("回收站"),"delete: confirmation says the folder goes to the recycle bin");
+            Click(window,"InlinePromptContinue");await Until(()=>doomedEditor.IsClosed);await Task.Delay(50);window.UpdateLayout();
+            Check(!installed.ListRecords().ContainsKey("local:embedded-delete") && !Directory.Exists(doomed) && Directory.Exists(recycled)
+                && !Get<ItemsControl>(window,"InstancesList").Items.OfType<InstanceCardViewModel>().Any(x=>x.InstanceId=="local:embedded-delete") && Get<ScrollViewer>(window,"InstancesScroll").IsVisible,
+                "delete: instance leaves the list and its folder is recycled");
+        }
+        finally { InstanceRemoval.RecycleOverride=null; }
         File.WriteAllText(Path.Combine(_output,"result.txt"),$"PASS {_checks} embedded interaction checks");
     }
 }

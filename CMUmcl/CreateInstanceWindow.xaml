@@ -368,8 +368,6 @@
                 <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="创建实例" FontSize="18" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="选择游戏和加载器，创建时自动下载所需文件" FontSize="12"
-                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
                 </StackPanel>
 
                 <Button Grid.Column="2" Style="{StaticResource CloseIconButton}" Click="CloseButton_Click" />
@@ -397,7 +395,6 @@
                             </StackPanel>
                             <TextBox x:Name="NameBox" Style="{StaticResource DialogTextBox}"
                                      TextChanged="NameBox_TextChanged" Margin="0,10,0,0" />
-                            <TextBlock Text="用于实例列表显示；目录名冲突会自动处理" Style="{StaticResource FieldHint}" />
                         </StackPanel>
                     </Border>
 
@@ -411,7 +408,6 @@
                             <ComboBox x:Name="GameVersionCombo" Style="{StaticResource DialogComboBox}"
                                       IsEditable="True" HorizontalAlignment="Stretch" Margin="0,10,0,0"
                                       SelectionChanged="GameVersionCombo_SelectionChanged" />
-                            <TextBlock Text="从列表选择或手动输入 Minecraft 版本" Style="{StaticResource FieldHint}" />
                         </StackPanel>
                     </Border>
 
@@ -479,7 +475,7 @@
                                 <StackPanel>
                                     <CheckBox x:Name="FabricApiCheck" Content="Fabric API"
                                               Style="{StaticResource DialogCheckBox}" IsChecked="False" />
-                                    <TextBlock Text="Fabric/Quilt 实例推荐安装；创建时自动从 Modrinth 下载"
+                                    <TextBlock Text="Fabric / Quilt 模组常用前置"
                                                Style="{StaticResource FieldHint}" />
                                 </StackPanel>
                             </Border>
@@ -519,15 +515,6 @@
                         </Border>
                     </StackPanel>
 
-                    <TextBlock Text="实例将存放于启动器实例目录" FontSize="12"
-                               Foreground="{DynamicResource MutedTextBrush}" TextAlignment="Center"
-                               HorizontalAlignment="Center" TextWrapping="Wrap" Margin="0,16,0,0" />
-
-                    <Border Style="{StaticResource InsetCard}" Margin="0,14,0,0">
-                        <TextBlock Text="创建后自动下载 Minecraft 游戏文件 + 加载器" FontSize="12"
-                                   Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"
-                                   TextAlignment="Center" />
-                    </Border>
 
                     <Border Style="{StaticResource InsetCard}" Margin="0,14,0,0">
                         <StackPanel>

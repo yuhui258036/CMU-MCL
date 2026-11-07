@@ -65,7 +65,11 @@ namespace CMUmcl
             _launchService = new LaunchService(_client, _store, _installedState, _settingsStore);
             _localInstanceService = new LocalInstanceService(_installedState);
 
-            AuthSession? session = TryRestoreSession();
+            // A saved session opens the main window at once; the skin site is asked in the
+            // background, so a slow or unreachable server never holds up startup. Launching a
+            // game validates the session again regardless.
+            AuthSession? session = LoadSavedSession();
+            bool verified = session == null;
             if (session == null)
             {
                 session = ShowLogin();
@@ -76,14 +80,11 @@ namespace CMUmcl
                 }
             }
 
-            ShowMainWindow(session);
+            ShowMainWindow(session, verified);
         }
 
-        /// <summary>
-        /// Attempts to restore a saved session: validate first, then refresh on 403.
-        /// Returns null if no valid session could be restored.
-        /// </summary>
-        private AuthSession? TryRestoreSession()
+        /// <summary>Reads the saved session without contacting the skin site.</summary>
+        private AuthSession? LoadSavedSession()
         {
             var saved = _store!.LoadSession();
             if (saved == null)
@@ -95,17 +96,13 @@ namespace CMUmcl
                 saved.ClientToken = _store.GetOrCreateClientToken();
             }
 
-            try
-            {
-                return _launchService!.EnsureValidSessionAsync(saved).GetAwaiter().GetResult();
-            }
+            try { AuthSessionGate.RequireComplete(saved); }
             catch (YggdrasilException)
             {
-                // Do not admit an unverified refresh response into the main window.
+                _store.ClearSession();
+                return null;
             }
-
-            _store.ClearSession();
-            return null;
+            return saved;
         }
 
         /// <summary>Shows the login window and returns the resulting session, or null if cancelled.</summary>
@@ -122,7 +119,7 @@ namespace CMUmcl
         }
 
         /// <summary>Shows the main window; on logout, returns to the login gate.</summary>
-        private void ShowMainWindow(AuthSession session)
+        private void ShowMainWindow(AuthSession session, bool verified = true)
         {
             var main = new MainWindow(session, _store!, _manifestClient!, _installer!, _installedState!, _launchService!, _settingsStore!, _localInstanceService!);
             main.ReauthenticateForLaunch = () => System.Threading.Tasks.Task.FromResult(ShowLogin(main));
@@ -151,6 +148,7 @@ namespace CMUmcl
 
             MainWindow = main;
             main.Show();
+            if (!verified) _ = main.VerifyRestoredSessionAsync(saved => _launchService!.EnsureValidSessionAsync(saved));
         }
 
         protected override void OnExit(ExitEventArgs e)

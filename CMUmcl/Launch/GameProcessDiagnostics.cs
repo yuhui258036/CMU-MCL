@@ -74,6 +74,29 @@ namespace CMUmcl.Launch
                 _codes.AddOrUpdate(match.Value, 1, (_, count) => count + 1);
         }
 
+        // Ordered from the most specific cause to the most generic symptom.
+        private static readonly (string Category, string Hint)[] Hints =
+        {
+            ("OutOfMemory", "内存不足，请提高内存分配或关闭其他程序。"),
+            ("UnsupportedClassVersion", "Java 版本过低，请使用自动选择或更高版本的 Java。"),
+            ("ModCompatibility", "模组不兼容或缺少前置，请检查模组版本。"),
+            ("NoClassDefFound", "缺少类文件，可能是模组缺少前置或版本不匹配。"),
+            ("ClassNotFound", "缺少类文件，可能是模组缺少前置或版本不匹配。"),
+            ("Initializer", "模组初始化失败，请检查最近添加或更新的模组。"),
+            ("Glfw", "无法创建游戏窗口，请更新显卡驱动。"),
+            ("OpenGL", "OpenGL 初始化失败，请更新显卡驱动。"),
+            ("Vulkan", "Vulkan 初始化失败，请更新显卡驱动或关闭相关模组。"),
+            ("NativeLibrary", "本地库加载失败，请检查 Java 架构或安全软件拦截。"),
+        };
+
+        /// <summary>Returns a short Chinese hint for the most likely crash cause, or null when nothing matched.</summary>
+        public string? DescribeHint()
+        {
+            foreach ((string category, string hint) in Hints)
+                if (_categories.ContainsKey(category)) return hint;
+            return null;
+        }
+
         /// <summary>Returns a bounded, user-safe summary. Never includes raw output.</summary>
         public string Describe()
         {

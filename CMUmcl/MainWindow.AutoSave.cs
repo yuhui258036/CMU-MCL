@@ -10,7 +10,7 @@ namespace CMUmcl;
 
 public partial class MainWindow
 {
-    private bool _preferencesReady, _closingAfterFlush, _flushingJava;
+    private bool _preferencesReady, _closingAfterFlush, _confirmingClose;
     private AppSettings? _unsavedSettings;
     private static AppSettings CopySettings(AppSettings value) => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(value))!;
 
@@ -40,37 +40,33 @@ public partial class MainWindow
     private void AutoUpdatePacks_Changed(object sender, RoutedEventArgs e)
         => SavePreference(s => s.AutoUpdatePacks = AutoUpdatePacksCheck.IsChecked == true);
 
-    private void SaveMemoryPreference()
-    {
-        if (!_preferencesReady || _loadingPreferences || _syncMemory) return;
-        if (MemoryAutoRadio.IsChecked == true)
-        {
-            ShowMemoryError(null);
-            SavePreference(s => s.AutoMemory = true);
-            return;
-        }
-        if (!int.TryParse(MemoryTextBox.Text, out int mb)) { ShowMemoryError("请输入有效的内存大小。"); return; }
-        string? error = MemoryAllocation.ValidateManual(mb, MemorySnapshot.Read(), _detectedJava?.Bits ?? 64);
-        ShowMemoryError(error);
-        if (error == null) SavePreference(s => { s.AutoMemory = false; s.MaxMemoryMb = mb; });
-    }
-
     private async void Preferences_Closing(object? sender, CancelEventArgs e)
     {
         if (_migrating) { e.Cancel = true; return; }
-        if (_flushingJava) { e.Cancel = true; return; }
-        if (_closingAfterFlush || _updatingLauncher || !_preferencesReady || JavaManualRadio.IsChecked != true) return;
-        string path = JavaPathTextBox.Text.Trim();
-        if (path.Length == 0 || path == _settings.JavaPath) return;
+        if (_closingAfterFlush || _updatingLauncher || !_preferencesReady) return;
+        _globalSettingsInline?.FlushPendingSave();
+        if (_globalSettingsInline?.HasUnsavedChanges != true) return;
         e.Cancel = true;
-        _flushingJava = true;
+        if (await ResolveUnsavedGameDefaultsAsync("退出")) { _closingAfterFlush = true; Close(); }
+    }
+
+    // Game defaults save on change; only edits that failed validation can still be pending here.
+    // Returns true when the caller may continue (nothing pending, saved, or discarded).
+    private async Task<bool> ResolveUnsavedGameDefaultsAsync(string action)
+    {
+        var editor = _globalSettingsInline;
+        editor?.FlushPendingSave();
+        if (editor == null || !editor.HasUnsavedChanges) return true;
+        if (_confirmingClose) return false;
+        _confirmingClose = true;
         try
         {
-            var java = await Task.Run(() => JavaLocator.DetectExecutable(path));
-            if (java is { Major: > 0, IsSupportedArchitecture: true }) SavePreference(s => s.JavaPath = java.JavaPath);
+            ShowSettingsView();
+            ShowSettingsTab(RuntimeTab);
+            var choice = await ShowInlinePromptAsync("设置未保存", $"全局游戏设置中有修改未通过校验，尚未保存。仍要{action}吗？这些修改将丢失。", "仍要" + action);
+            return !_windowClosed && choice == InlineChoice.Continue;
         }
-        catch { /* An incomplete or inaccessible path must not prevent closing. */ }
-        finally { _flushingJava = false; _closingAfterFlush = true; Close(); }
+        finally { _confirmingClose = false; }
     }
 
     private async Task ChangeInstancesDirectoryAsync(string? directory)
@@ -90,7 +86,7 @@ public partial class MainWindow
             if (SavePreference(s => s.InstancesDirectory = directory)) InstancesDirectoryTextBox.Text = directory ?? "";
             return;
         }
-        if (MessageBox.Show(this, $"将 {records.Count} 个实例从\n{oldDirectory}\n移动到\n{destination}\n\n是否继续？", "更改游戏目录", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (LauncherPrompt.Show(this, $"将 {records.Count} 个实例从\n{oldDirectory}\n移动到\n{destination}\n\n是否继续？", "更改游戏目录", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         try
         {
             _migrating = true; SettingsContentScroll.IsEnabled = false;

@@ -188,6 +188,26 @@ namespace CMUmcl.Launch
                 return null;
 
             string javaPath = hasJavaw ? javaw : java;
+            // Detection may start `java -version`; reuse the answer while the executable is unchanged.
+            DateTime stamp;
+            try
+            {
+                stamp = File.GetLastWriteTimeUtc(javaPath);
+                string release = Path.Combine(root, "release");
+                if (File.Exists(release)) { DateTime r = File.GetLastWriteTimeUtc(release); if (r > stamp) stamp = r; }
+            }
+            catch { stamp = default; }
+            if (DetectCache.TryGetValue(javaPath, out var cached) && cached.Stamp == stamp)
+                return cached.Info;
+            JavaInfo? detected = DetectUncached(root, javaPath, javaw, java, hasJavaw, hasJava);
+            DetectCache[javaPath] = (stamp, detected);
+            return detected;
+        }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, JavaInfo? Info)> DetectCache = new(StringComparer.OrdinalIgnoreCase);
+
+        private static JavaInfo? DetectUncached(string root, string javaPath, string javaw, string java, bool hasJavaw, bool hasJava)
+        {
             string version = string.Empty;
             int major = 0;
             string architecture = "unknown", vendor = string.Empty;

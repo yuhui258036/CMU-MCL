@@ -12,7 +12,7 @@ internal static partial class Program
         {
             IconConcurrencyHandler.Peak=0;
             Task.WhenAll(Enumerable.Range(0,20).Select(i=>bounded.LoadAsync("https://cdn.modrinth.com/"+i+".png",default))).GetAwaiter().GetResult();
-            Check(IconConcurrencyHandler.Peak<=4&&IconConcurrencyHandler.Peak>1,"icon: concurrent requests bounded at four");
+            Check(IconConcurrencyHandler.Peak<=6&&IconConcurrencyHandler.Peak>1,"icon: concurrent requests bounded at six");
             using var cancel=new CancellationTokenSource();cancel.Cancel();Check(bounded.LoadAsync("https://cdn.modrinth.com/cancel.png",cancel.Token).GetAwaiter().GetResult()==null,"icon: canceled queued request falls back safely");
         }
         // 1. Non-allowlisted icon host returns null (placeholder).

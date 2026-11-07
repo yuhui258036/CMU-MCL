@@ -51,10 +51,22 @@ namespace CMUmcl.Auth
         public string Username { get; set; } = string.Empty;
     }
 
+    /// <summary>What kind of failure a skin-site request hit.</summary>
+    public enum YggdrasilFailure
+    {
+        /// <summary>The server answered with a regular error (bad credentials, rejected token, ...).</summary>
+        Other,
+        /// <summary>No HTTP answer at all: DNS, connection, TLS or timeout. The cause may be either side.</summary>
+        Unreachable,
+        /// <summary>The server answered, but with a 5xx or an unexpected status.</summary>
+        ServerError,
+    }
+
     /// <summary>Raised when the Yggdrasil server returns an error or an unexpected status.</summary>
     public sealed class YggdrasilException : Exception
     {
         public bool RequiresLogin { get; }
+        public YggdrasilFailure Failure { get; internal set; }
         public YggdrasilException(string message) : base(message) { }
         public YggdrasilException(string message, bool requiresLogin) : base(message) { RequiresLogin = requiresLogin; }
         public YggdrasilException(string message, Exception inner) : base(message, inner) { }
@@ -170,7 +182,7 @@ namespace CMUmcl.Auth
                 if (resp.StatusCode == HttpStatusCode.Forbidden) return false;
 
                 // Any other status (e.g. 5xx) is treated as an unavailable/error state.
-                throw new YggdrasilException("皮肤站暂时不可用，请稍后再试。");
+                throw new YggdrasilException("皮肤站暂时不可用（HTTP " + (int)resp.StatusCode + "），请稍后再试。") { Failure = YggdrasilFailure.ServerError };
             }
             catch (YggdrasilException)
             {
@@ -178,11 +190,11 @@ namespace CMUmcl.Auth
             }
             catch (HttpRequestException)
             {
-                throw new YggdrasilException("网络错误，无法连接皮肤站，请检查网络连接。");
+                throw new YggdrasilException("网络错误，无法连接皮肤站，请检查网络连接。") { Failure = YggdrasilFailure.Unreachable };
             }
             catch (TaskCanceledException) when (!ct.IsCancellationRequested)
             {
-                throw new YggdrasilException("连接皮肤站超时，请稍后再试。");
+                throw new YggdrasilException("连接皮肤站超时，请稍后再试。") { Failure = YggdrasilFailure.Unreachable };
             }
         }
 
@@ -260,11 +272,11 @@ namespace CMUmcl.Auth
             }
             catch (HttpRequestException ex)
             {
-                throw new YggdrasilException("网络错误，无法连接皮肤站，请检查网络连接。", ex);
+                throw new YggdrasilException("网络错误，无法连接皮肤站，请检查网络连接。", ex) { Failure = YggdrasilFailure.Unreachable };
             }
             catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
             {
-                throw new YggdrasilException("连接皮肤站超时，请稍后再试。", ex);
+                throw new YggdrasilException("连接皮肤站超时，请稍后再试。", ex) { Failure = YggdrasilFailure.Unreachable };
             }
         }
 
@@ -292,7 +304,10 @@ namespace CMUmcl.Auth
             }
 
             string friendly = MapError(error, errorMessage, status);
-            return new YggdrasilException(friendly, status == HttpStatusCode.Forbidden || status == HttpStatusCode.Unauthorized);
+            return new YggdrasilException(friendly, status == HttpStatusCode.Forbidden || status == HttpStatusCode.Unauthorized)
+            {
+                Failure = (int)status >= 500 ? YggdrasilFailure.ServerError : YggdrasilFailure.Other,
+            };
         }
 
         private static string MapError(string? error, string? errorMessage, HttpStatusCode status)

@@ -29,14 +29,44 @@ namespace CMUmcl.Community
         private static readonly HashSet<string> IconHosts = CreateIconHosts();
 
         private readonly HttpClient _http;
-        private readonly SemaphoreSlim _slots=new(4,4);
+        private readonly SemaphoreSlim _slots=new(6,6);
+        // Icons rarely change; keeping them on disk makes the community page fill instantly on later launches.
+        private readonly string? _diskCache;
+        private static readonly TimeSpan DiskCacheAge = TimeSpan.FromDays(30);
+        private static int _pruned;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource> _cache = new(StringComparer.Ordinal);
 
         public ResourceIconLoader()
-            : this(CMUmcl.Network.LauncherProxy.CreateHandler(allowAutoRedirect: false, useCookies: false)) { }
+            : this(CMUmcl.Network.LauncherProxy.CreateHandler(allowAutoRedirect: false, useCookies: false), Path.Combine(CMUmcl.Content.LauncherPaths.RootDirectory, "cache", "icons")) { }
 
-        internal ResourceIconLoader(HttpMessageHandler inner)
+        private static void Prune(string directory)
         {
+            try
+            {
+                foreach (var file in new DirectoryInfo(directory).EnumerateFiles("*.img"))
+                    if (DateTime.UtcNow - file.LastWriteTimeUtc > DiskCacheAge) { try { file.Delete(); } catch { } }
+            }
+            catch { /* best effort */ }
+        }
+
+        private string? DiskPath(string url)
+        {
+            if (_diskCache == null) return null;
+            using var sha = System.Security.Cryptography.SHA1.Create();
+            return Path.Combine(_diskCache, BitConverter.ToString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url))).Replace("-", "").ToLowerInvariant() + ".img");
+        }
+
+        internal ResourceIconLoader(HttpMessageHandler inner, string? diskCache = null)
+        {
+            if (diskCache != null)
+            {
+                try
+                {
+                    Directory.CreateDirectory(diskCache); _diskCache = diskCache;
+                    if (Interlocked.Exchange(ref _pruned, 1) == 0) _ = Task.Run(() => Prune(diskCache));
+                }
+                catch { _diskCache = null; }
+            }
             _http = new HttpClient(new SafeRedirectHandler(inner, host => IconHosts.Contains(host), sameHostOnly: false))
             {
                 Timeout = TimeSpan.FromSeconds(30),
@@ -49,6 +79,22 @@ namespace CMUmcl.Community
             if (string.IsNullOrWhiteSpace(url)) return null;
             if (!CommunityHosts.TryGetHttpsHost(url, out string? host) || !IconHosts.Contains(host!)) return null;
             if (_cache.TryGetValue(url, out BitmapSource? cached)) return cached;
+            string? disk = DiskPath(url);
+            if (disk != null)
+            {
+                BitmapSource? stored = await Task.Run(() =>
+                {
+                    try
+                    {
+                        var info = new FileInfo(disk);
+                        if (!info.Exists || info.Length > MaxBytes || DateTime.UtcNow - info.LastWriteTimeUtc > DiskCacheAge) return null;
+                        using var file = new MemoryStream(File.ReadAllBytes(disk));
+                        return Decode(file);
+                    }
+                    catch { return null; }
+                }, ct).ConfigureAwait(false);
+                if (stored != null) { _cache[url] = stored; return stored; }
+            }
 
             bool entered=false;
             try
@@ -72,7 +118,16 @@ namespace CMUmcl.Community
                 }
                 ms.Position = 0;
                 BitmapSource? bmp = Decode(ms);
-                if (bmp != null) _cache[url] = bmp;
+                if (bmp != null)
+                {
+                    _cache[url] = bmp;
+                    if (disk != null)
+                    {
+                        // Write-then-rename so a crash never leaves a truncated cache entry.
+                        try { string temp = disk + "." + Guid.NewGuid().ToString("N") + ".tmp"; File.WriteAllBytes(temp, ms.ToArray()); if (File.Exists(disk)) File.Delete(disk); File.Move(temp, disk); }
+                        catch { /* cache is optional */ }
+                    }
+                }
                 return bmp;
             }
             catch { return null; }

@@ -140,8 +140,8 @@ namespace CMUmcl.Community
         public bool IsLoadingDependencies { get => _isLoadingDependencies; private set { if (Set(ref _isLoadingDependencies, value)) OnPropertyChanged(nameof(CanInstall)); } }
         public bool HasDependencies => _loadDependency != null && SelectedVersion?.Dependencies.Count > 0;
         public string DependencyNotice => SelectedVersion?.Dependencies.Any(d => d.Kind == DependencyKind.Required) == true
-            ? "安装按钮只安装当前模组；必需前置需另行安装。已有相应前置时无需重复下载。"
-            : "以下为此版本声明的关联内容，请按需查看。";
+            ? "安装按钮只安装当前模组；缺少的必需前置需另行安装。"
+            : "相关资源";
         private string _dependencyError = "";
         public string DependencyError { get => _dependencyError; private set { if (Set(ref _dependencyError, value)) OnPropertyChanged(nameof(HasDependencyError)); } }
         public bool HasDependencyError => !string.IsNullOrEmpty(DependencyError);
@@ -195,7 +195,7 @@ namespace CMUmcl.Community
                 })).ConfigureAwait(true);
                 if (generation != _dependencyGeneration) return;
                 _checkedDependencyVersion = version;
-                if (rows.Any(r => r.HasError)) DependencyError = "部分前置读取失败，不能据此判断没有前置。可重试加载。";
+                if (rows.Any(r => r.HasError)) DependencyError = "部分前置加载失败，请重试。";
             }
             catch (OperationCanceledException) { }
             finally { if (generation == _dependencyGeneration) { IsLoadingDependencies = false; OnPropertyChanged(nameof(CanInstall)); } }

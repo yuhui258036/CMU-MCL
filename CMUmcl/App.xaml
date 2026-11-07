@@ -90,7 +90,27 @@
             <SolidColorBrush x:Key="HoverBrush" Color="#100E3263" />
             <SolidColorBrush x:Key="PressedBrush" Color="#19000000" />
             <SolidColorBrush x:Key="WindowBackdropBrush" Color="#F3F5F8" />
-            <Style TargetType="ToolTip"><Setter Property="Background" Value="{DynamicResource PanelBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+            <Style TargetType="ToolTip">
+                <Setter Property="OverridesDefaultStyle" Value="True" />
+                <Setter Property="HasDropShadow" Value="False" />
+                <Setter Property="Background" Value="{DynamicResource PopupBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="10,7" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToolTip">
+                            <Border Margin="0,0,10,12" Padding="{TemplateBinding Padding}" CornerRadius="6" BorderThickness="1"
+                                    Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    SnapsToDevicePixels="True" UseLayoutRounding="True">
+                                <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.18" Color="Black" /></Border.Effect>
+                                <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
 
             <!-- Button style -->
             <Style TargetType="Button">
@@ -183,6 +203,7 @@
             <Setter Property="MinHeight" Value="40" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="MaxDropDownHeight" Value="280" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
@@ -226,13 +247,14 @@
                                               VerticalAlignment="Center" HorizontalAlignment="Left"
                                               IsHitTestVisible="False" />
 
-                            <TextBox x:Name="PART_EditableTextBox" Grid.Column="0"
-                                     Margin="{TemplateBinding Padding}"
+                            <!-- Fills the field up to the arrow so a click anywhere places the caret. -->
+                            <TextBox x:Name="PART_EditableTextBox" Grid.Column="0" MinHeight="0"
+                                     Margin="12,0,30,0"
                                      Background="Transparent" BorderThickness="0" Padding="0"
                                      Foreground="{TemplateBinding Foreground}"
                                      CaretBrush="{DynamicResource TextBrush}"
                                      VerticalContentAlignment="Center" VerticalAlignment="Center"
-                                     HorizontalAlignment="Left"
+                                     HorizontalAlignment="Stretch"
                                      Visibility="Hidden" />
 
                             <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True"
@@ -254,6 +276,9 @@
                             <Trigger Property="IsEditable" Value="True">
                                 <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="contentPresenter" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MutedTextBrush}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -354,6 +379,8 @@
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="MinHeight" Value="38" />
                 <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+                <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="SelectionOpacity" Value="0.35" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="Template">
@@ -384,6 +411,8 @@
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="MinHeight" Value="38" />
                 <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+                <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="SelectionOpacity" Value="0.35" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="Template">
