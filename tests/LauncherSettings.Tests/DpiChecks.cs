@@ -43,7 +43,9 @@ internal static partial class Program
             window.Width=Math.Min(1200,availableWidth);window.Height=Math.Min(800,availableHeight);
             await Task.Delay(30);window.UpdateLayout();
             Check(window.ActualWidth<=availableWidth+1 && window.ActualHeight<=availableHeight+1,"main window fits simulated "+scale+" work area in "+theme);
-            Check(GetWindowRect(handle,out var nativeRect) && nativeRect.Right-nativeRect.Left<=Math.Ceiling(availableWidth)+1 && nativeRect.Bottom-nativeRect.Top<=Math.Ceiling(availableHeight)+1,"native frame fits simulated "+scale+" work area in "+theme);
+            // Native rectangles are physical pixels; the simulated work area above is in WPF DIPs.
+            double nativeScale=GetDpiForWindow(handle)/96d;
+            Check(GetWindowRect(handle,out var nativeRect) && nativeRect.Right-nativeRect.Left<=Math.Ceiling(availableWidth*nativeScale)+1 && nativeRect.Bottom-nativeRect.Top<=Math.Ceiling(availableHeight*nativeScale)+1,"native frame fits simulated "+scale+" work area in "+theme);
             foreach(string page in new[]{"PacksNavButton","InstancesNavButton","RuntimeTab","AppearanceTab","ProxyTab","StorageTab","UpdateTab"})
             {
                 if(page.EndsWith("Tab"))Click(window,"SettingsNavButton");

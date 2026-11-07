@@ -145,7 +145,7 @@
                 <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="处理名称冲突" FontSize="18" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="以下实例的目标文件夹名或显示名称与已有实例冲突，可直接编辑后继续迁移。"
+                    <TextBlock Text="名称重复，请修改后继续迁移。"
                                FontSize="12" Foreground="{DynamicResource MutedTextBrush}"
                                Margin="0,3,0,0" TextWrapping="Wrap" />
                 </StackPanel>

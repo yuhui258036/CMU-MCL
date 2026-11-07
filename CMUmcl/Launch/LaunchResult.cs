@@ -20,5 +20,12 @@ namespace CMUmcl.Launch
         /// False means the process is still running but no window appeared in time.
         /// </summary>
         public bool WindowDetected { get; init; }
+
+        /// <summary>Output classification for the started process, used to explain an abnormal exit.</summary>
+        public GameProcessDiagnostics? Diagnostics { get; init; }
+
+        /// <summary>The Java runtime the game was started with.</summary>
+        public string? JavaPath { get; init; }
+        public int? JavaMajor { get; init; }
     }
 }

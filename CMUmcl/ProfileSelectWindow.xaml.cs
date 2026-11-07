@@ -44,7 +44,7 @@ namespace CMUmcl
             }
             else
             {
-                MessageBox.Show(this, "请选择一个角色。", "CMUmcl", MessageBoxButton.OK, MessageBoxImage.Information);
+                LauncherPrompt.Show(this, "请选择一个角色。", "CMUmcl", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
     }

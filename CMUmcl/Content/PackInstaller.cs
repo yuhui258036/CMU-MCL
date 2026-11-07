@@ -117,6 +117,9 @@ namespace CMUmcl.Content
             IProgress<PackInstallProgress>? progress,
             CancellationToken ct)
         {
+            // Captured before anything is written: the managed files of the revision being replaced.
+            PackInstallState? previous = PackStateStore.Load(instanceDir);
+
             // 1. Download the .mrpack into the pack cache and verify it.
             string packCacheDir = Path.Combine(LauncherPaths.PackCacheDirectory, instance.Id);
             string packPath = Path.Combine(packCacheDir, $"{instance.Id}-{instance.Revision}.mrpack");
@@ -140,6 +143,21 @@ namespace CMUmcl.Content
                     Message = file.Path,
                 });
                 await DownloadFileAsync(file, instanceDir, progress, ct).ConfigureAwait(false);
+            }
+
+            // 3b. Same rule as the incremental planner: remove files the previous revision managed
+            //     that the new index no longer lists, so a dropped or renamed mod jar cannot linger
+            //     beside its replacement. Done before overrides so files they ship are kept.
+            if (previous != null)
+            {
+                var current = new HashSet<string>(files.Where(f => f.Path != null).Select(f => PackFileSystem.NormalizeRelativePath(f.Path!)), StringComparer.Ordinal);
+                foreach (PackInstallStateFile old in previous.Files)
+                {
+                    if (!PackFileIndexValidation.IsSafeRelativePath(old.Path)) continue;
+                    string path = PackFileSystem.NormalizeRelativePath(old.Path);
+                    if (!current.Contains(path))
+                        TryDelete(PackFileSystem.ResolveUnder(instanceDir, PackFileSystem.SanitizeRelativePath(path)));
+                }
             }
 
             // 4. Extract overrides/ then client-overrides/ into the instance dir.

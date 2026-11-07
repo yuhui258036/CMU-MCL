@@ -25,7 +25,12 @@ namespace CMUmcl.Community
 
         public ResourceCatalog(params IResourceSource[] sources) { _sources = sources; }
 
-        public async Task<CatalogPage> SearchAsync(ResourceQuery query, string? targetLoader, string? targetGame, CancellationToken ct)
+        /// <param name="sourceCompleted">
+        /// Called (on a worker thread) with the merged, ordered projects received so far each time a
+        /// source finishes, so the UI can show the faster source without waiting for the slower one.
+        /// </param>
+        public async Task<CatalogPage> SearchAsync(ResourceQuery query, string? targetLoader, string? targetGame, CancellationToken ct,
+            Action<IReadOnlyList<ResourceProject>>? sourceCompleted = null)
         {
             var available = _sources.Where(s => s.IsAvailable).ToList();
             var page = new CatalogPage();
@@ -48,8 +53,11 @@ namespace CMUmcl.Community
 
             int perSourcePageSize = allSources ? 25 : 50;
             var tasks = new List<Task<IReadOnlyList<ResourceProject>>>();
+            var received = new IReadOnlyList<ResourceProject>?[sourceSet.Count];
+            int slot = 0;
             foreach (IResourceSource src in sourceSet)
             {
+                int index = slot++;
                 var q = new ResourceQuery
                 {
                     SearchText = query.SearchText,
@@ -61,18 +69,34 @@ namespace CMUmcl.Community
                     Index = query.Index,
                     PageSize = perSourcePageSize,
                 };
-                tasks.Add(RunSourceAsync(src, q, page.Failures, ct));
+                tasks.Add(ReportAsync(RunSourceAsync(src, q, page.Failures, ct), index));
+            }
+
+            async Task<IReadOnlyList<ResourceProject>> ReportAsync(Task<IReadOnlyList<ResourceProject>> run, int index)
+            {
+                var list = await run.ConfigureAwait(false);
+                if (sourceCompleted != null && list.Count > 0)
+                {
+                    IReadOnlyList<ResourceProject> sofar;
+                    lock (received) { received[index] = list; sofar = Merge(received.Where(r => r != null).SelectMany(r => r!), query, targetLoader, targetGame); }
+                    sourceCompleted(sofar);
+                }
+                return list;
             }
 
             IReadOnlyList<ResourceProject>[] results = await Task.WhenAll(tasks).ConfigureAwait(false);
-            foreach (IReadOnlyList<ResourceProject> list in results)
-                foreach (ResourceProject p in list)
-                    page.Projects.Add(p);
+            page.Projects = Merge(results.SelectMany(r => r), query, targetLoader, targetGame).ToList();
+            page.HasMore = results.Any(r => r.Count >= perSourcePageSize); // any full page implies a possible next page
+            return page;
+        }
 
+        // Source order is fixed by the source list, so a partial merge already has its final relative order.
+        private static IReadOnlyList<ResourceProject> Merge(IEnumerable<ResourceProject> projects, ResourceQuery query, string? targetLoader, string? targetGame)
+        {
             // (Source, Id) dedupe (never merge by title).
             var seen = new HashSet<(ResourceSourceId, string)>();
             var deduped = new List<ResourceProject>();
-            foreach (ResourceProject p in page.Projects)
+            foreach (ResourceProject p in projects)
                 if (seen.Add((p.Source, p.Id)))
                     deduped.Add(p);
 
@@ -81,17 +105,13 @@ namespace CMUmcl.Community
                 p.Hint = CompatibilityEvaluator.ProjectHint(p, query.Kind, targetLoader, targetGame);
 
             // Page-local sort (no cross-source global ranking guarantee).
-            deduped = query.Sort switch
+            return query.Sort switch
             {
                 ResourceSort.Downloads => deduped.OrderByDescending(p => p.Downloads).ToList(),
                 ResourceSort.LastUpdated => deduped.OrderByDescending(p => p.UpdatedAt ?? DateTimeOffset.MinValue).ToList(),
                 ResourceSort.Name => deduped.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList(),
                 _ => deduped, // Recommended: keep native relevance order (Modrinth page then CurseForge page).
             };
-
-            page.Projects = deduped;
-            page.HasMore = results.Any(r => r.Count >= perSourcePageSize); // any full page implies a possible next page
-            return page;
         }
 
         private static async Task<IReadOnlyList<ResourceProject>> RunSourceAsync(

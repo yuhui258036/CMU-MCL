@@ -44,13 +44,13 @@ public partial class MainWindow
             return;
         }
         if (!int.TryParse(ProxyPortTextBox.Text, out int port) || port is < 1 or > 65535)
-        { ProxyErrorText.Text = "端口应为 1～65535。尚未应用此修改。"; return; }
+        { ProxyErrorText.Text = "端口范围为 1～65535。"; return; }
         string host = ProxyHostTextBox.Text.Trim();
         if (!LauncherProxy.TryAddress(mode, host, port, out _))
-        { ProxyErrorText.Text = "请输入有效的代理主机（域名或 IP，不含协议和端口）。尚未应用此修改。"; return; }
+        { ProxyErrorText.Text = "请填写域名或 IP，不含协议和端口。"; return; }
         bool authentication = ProxyAuthenticationCheck.IsChecked == true;
         if (authentication && _proxyPasswordUnreadable)
-        { ProxyErrorText.Text = "无法读取代理密码，请重新输入。尚未应用此修改。"; return; }
+        { ProxyErrorText.Text = "无法读取代理密码，请重新输入。"; return; }
         try
         {
             var saved = _unsavedSettings ?? _settings;
@@ -70,6 +70,6 @@ public partial class MainWindow
                 s.ProxyPasswordProtected = passwordProtected;
             });
         }
-        catch { ProxyErrorText.Text = "无法保存代理密码，请重新输入。尚未应用此修改。"; }
+        catch { ProxyErrorText.Text = "无法保存代理密码，请重新输入。"; }
     }
 }

@@ -781,8 +781,8 @@ namespace CMUmcl
         private void UpdateInstallHint()
         {
             InstallHintText.Text = _selectedLoader is "fabric" or "quilt"
-                ? "将自动安装 Fabric API；实例名称冲突会自动处理。"
-                : "实例名称冲突会自动处理。";
+                ? "将安装 Fabric API。"
+                : "";
         }
 
         // ------------------------------------------------------------------
@@ -1001,7 +1001,7 @@ namespace CMUmcl
             ProgressMessageText.Text = string.Empty;
             ProgressErrorText.Text = message;
             ProgressErrorHint.Text = instanceCreated
-                ? "下载目录已保留，请在此处重试；完成后才会加入实例列表。"
+                ? "已下载文件已保留，请重试。"
                 : "实例尚未创建，可以重试。";
             ProgressErrorPanel.Visibility = Visibility.Visible;
             ProvisionBar.IsIndeterminate = false;
@@ -1097,7 +1097,7 @@ namespace CMUmcl
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), "无法打开目录：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                LauncherPrompt.Show(Window.GetWindow(this)!, "无法打开目录：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

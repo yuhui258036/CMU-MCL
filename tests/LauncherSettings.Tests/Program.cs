@@ -130,6 +130,19 @@ internal static partial class Program
         Check(Descendants(Get<ItemsControl>(window,"CardsList")).OfType<TextBlock>().Any(x=>x.Text=="\u5FC5\u9700"),"required chip is rendered in the pack card");
         if(Environment.GetCommandLineArgs().Contains("--auth-recovery")){await AuthRecoveryChecks(window);window.Close();return;}
         await LauncherUpdatePopupChecks(window);
+        bool netOffline=Environment.GetCommandLineArgs().Contains("--net-offline");
+        if(preview && (netOffline || Environment.GetCommandLineArgs().Contains("--skin-offline")))
+        {
+            // Preview only: a skin-site request fails at startup and when launching. --skin-offline
+            // plays a confirmed skin-site outage, --net-offline the user's own network being down.
+            var problem=netOffline?CMUmcl.Network.ConnectionProblem.LocalNetwork:CMUmcl.Network.ConnectionProblem.SkinSiteDown;
+            CMUmcl.Network.ConnectionDiagnosis.Override=async(_,ct)=>{await Task.Delay(800,ct);return problem;};
+            var down=new YggdrasilException("网络错误，无法连接皮肤站，请检查网络连接。"){Failure=YggdrasilFailure.Unreachable};
+            _ = window.VerifyRestoredSessionAsync(_=>Task.FromException<AuthSession>(down));
+            window._launchOverride=(_,_)=>Task.FromException<LaunchResult>(new LaunchException("无法确认登录状态："+down.Message,down));
+        }
+        if(preview && Environment.GetCommandLineArgs().Contains("--instance-pages"))
+        { ShowInstancePagesPreview(window,installed,store);return; }
         if(Environment.GetCommandLineArgs().Contains("--local-mod-icons")){await LocalModIconChecks(Path.GetFullPath(Environment.GetCommandLineArgs()[1]));window.Close();return;}
         if(Environment.GetCommandLineArgs().Contains("--folder-import")){await FolderImportChecks(installed);window.Close();return;}
         if(Environment.GetCommandLineArgs().Contains("--instance-content")){await InstanceContentChecks(window,installed,store);window.Close();return;}
@@ -155,17 +168,26 @@ internal static partial class Program
             authStore,client,installer,installed,launch,new SettingsStore(),new LocalInstanceService(installed),
             new LauncherUpdateClient(new HttpClient(new FixtureHandler([],[])),Compat.ExportPem((ECDsaCng)key)), CreateCommunityFixture(installed));
         Check(File.ReadAllText(LauncherPaths.SettingsPath)==savedJson && Get<ComboBox>(reloaded,"ThemeCombo").SelectedIndex==(int)LauncherTheme.Dark
-            && Get<TextBox>(reloaded,"MemoryTextBox").Text=="3072" && Get<CheckBox>(reloaded,"AutoUpdatePacksCheck").IsChecked==false,
+            && Get<CheckBox>(reloaded,"AutoUpdatePacksCheck").IsChecked==false,
             "new window restores saved settings without writing during initialization");
         reloaded.Close();
         await BackgroundChecks();
         await ActivityChecks(window, store);
-        string closingJava = CreateJavaFixture("closing-java", "21.0.6", "x64");
-        Get<RadioButton>(window,"JavaManualRadio").IsChecked=true;
-        Get<TextBox>(window,"JavaPathTextBox").Text=closingJava;
+        Click(window,"SettingsNavButton");Click(window,"RuntimeTab");
+        var defaults=(InstanceSettingsView)Get<ContentControl>(window,"GameDefaultsCard").Content;
+        var defaultsWidth=(TextBox)typeof(InstanceSettingsView).GetField("_width",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(defaults)!;
+        int savedWidth=store.Load().WindowWidth;
+        defaultsWidth.Text="10";
+        Click(window,"PacksNavButton");
+        window.Close();
+        await Until(() => Get<Grid>(window,"InlinePromptOverlay").IsVisible);
+        Check(window.IsVisible && Get<FrameworkElement>(window,"SettingsScroll").IsVisible && store.Load().WindowWidth==savedWidth,"closing with an invalid game default asks before exit and writes nothing");
+        Click(window,"InlinePromptCancel");await Task.Delay(50);
+        Check(window.IsVisible && defaults.HasUnsavedChanges,"cancelling the close prompt keeps the window and the edit to fix");
+        defaultsWidth.Text="1500";
         window.Close();
         await Until(() => !window.IsVisible);
-        Check(store.Load().JavaPath==closingJava,"closing flushes pending valid Java detection");
+        Check(store.Load().WindowWidth==1500,"closing saves a valid pending game default without asking");
         File.WriteAllText(Path.Combine(_output,"result.txt"), $"PASS {_checks} checks");
         Console.WriteLine($"PASS {_checks} launcher settings checks; artifacts: {_output}");
     }

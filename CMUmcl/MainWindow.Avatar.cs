@@ -32,7 +32,7 @@ namespace CMUmcl
             try
             {
                 var image = await _avatarService.GetAsync(_session.SelectedProfileId, _avatarLifetime.Token, force);
-                if (!_windowClosed) { SetAccountAvatar(image);_skinPreview.SetSkin(_avatarService.Skin,_avatarService.IsSlim);RefreshSkinButton.ToolTip="已完成刷新；网络不可用时保留缓存"; }
+                if (!_windowClosed) { SetAccountAvatar(image);_skinPreview.SetSkin(_avatarService.Skin,_avatarService.IsSlim);RefreshSkinButton.ToolTip="已刷新"; }
             }
             catch (OperationCanceledException) { }
             catch (Exception) { if(!_windowClosed) RefreshSkinButton.ToolTip="皮肤预览暂时不可用，可重试刷新"; }

@@ -93,7 +93,14 @@ namespace CMUmcl
         public string LaunchActionText { get=>_launchActionText; private set { _launchActionText=value;OnPropertyChanged();OnPropertyChanged(nameof(HasLaunchAction)); } }
         public bool HasLaunchAction => LaunchActionText.Length>0;
         internal void ClearLaunchActionIfIdle(bool running) { if(!running)LaunchActionText=""; }
-        internal void GameExited() { LaunchActionText="";LaunchFail("游戏已退出"); }
+        internal const string CrashReportAction="导出崩溃报告";
+        internal void OfferCrashReport() { LaunchActionText=CrashReportAction; }
+        internal void GameExited(int? exitCode=null,string? hint=null,bool stoppedByUser=false)
+        {
+            LaunchActionText="";
+            if(stoppedByUser || exitCode is null or 0){LaunchFail(stoppedByUser?"游戏已结束":"游戏已退出");return;}
+            LaunchFail($"游戏异常退出（代码 {exitCode}）"+(hint==null?"":"："+hint));
+        }
 
         private string _statusText = string.Empty;
         public string StatusText

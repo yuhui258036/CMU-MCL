@@ -146,10 +146,10 @@ internal static partial class Program
                 Check(filter.ActualWidth <= view.ActualWidth && filter.ActualWidth > 500, "resource: labeled filters fit " + size.width);
                 var input = Get<TextBox>(view, "ResourceSearchText"); var sourceBox = Get<ComboBox>(view, "SourceFilter");
                 input.ApplyTemplate(); sourceBox.ApplyTemplate();
-                var textFrame = (Border)input.Template.FindName("InputFrame", input); var toggle = (System.Windows.Controls.Primitives.ToggleButton)sourceBox.Template.FindName("DropDownButton", sourceBox); toggle.ApplyTemplate(); var comboFrame = (Border)toggle.Template.FindName("InputFrame", toggle);
-                Check(textFrame.CornerRadius == new CornerRadius(0) && comboFrame.CornerRadius == new CornerRadius(0) && Math.Abs(input.ActualHeight-sourceBox.ActualHeight)<1, "resource: symmetric rectangular input controls " + size.width);
-                Check(Descendants(sourceBox).OfType<TextBlock>().Any(t => t.Text == vm.SelectedSourceOption!.Label), "resource: rectangular selector renders display label rather than type name");
-                sourceBox.IsDropDownOpen = true; await Task.Delay(50); Check(((System.Windows.Controls.Primitives.Popup)sourceBox.Template.FindName("PART_Popup", sourceBox)).IsOpen, "resource: rectangular source selector still opens its menu"); sourceBox.IsDropDownOpen = false;
+                var textFrame = (Border)input.Template.FindName("InputFrame", input); var comboFrame = (Border)sourceBox.Template.FindName("border", sourceBox);
+                Check(textFrame.CornerRadius == new CornerRadius(6) && comboFrame.CornerRadius == new CornerRadius(6) && sourceBox.FocusVisualStyle == null && Math.Abs(input.ActualHeight-sourceBox.ActualHeight)<1, "resource: inputs use the launcher rounded style at equal height " + size.width);
+                Check(Descendants(sourceBox).OfType<TextBlock>().Any(t => t.Text == vm.SelectedSourceOption!.Label), "resource: selector renders display label rather than type name");
+                sourceBox.IsDropDownOpen = true; await Task.Delay(50); Check(((System.Windows.Controls.Primitives.Popup)sourceBox.Template.FindName("PART_Popup", sourceBox)).IsOpen, "resource: source selector still opens its menu"); sourceBox.IsDropDownOpen = false;
                 Screenshot(window, source + "-results-" + size.width + ".png");
             }
             int grants = transport.Grants;

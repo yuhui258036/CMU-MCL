@@ -28,7 +28,7 @@ namespace CMUmcl.Community
         public ResolvedDependency? Resolution { get; private set; }
         public DependencyItemViewModel(ResourceDependency reference) { Reference = reference; }
         public string GroupLabel => Reference.Kind switch {
-            DependencyKind.Required => "必需前置（需另行安装，缺少可能无法启动）",
+            DependencyKind.Required => "必需前置（缺少可能无法启动）",
             DependencyKind.Optional => "可选前置（按需安装）",
             DependencyKind.Incompatible => "不兼容模组（不建议同时安装）",
             DependencyKind.Embedded => "已包含的组件（通常无需单独安装）",

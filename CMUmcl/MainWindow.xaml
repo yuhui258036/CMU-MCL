@@ -308,6 +308,10 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
                         <Border Grid.Column="0" Width="38" Height="38" CornerRadius="0"
                                 SnapsToDevicePixels="True" UseLayoutRounding="True"
@@ -324,7 +328,7 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                            <TextBlock Text="已登录" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="AccountStateText" Text="已登录" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" TextTrimming="CharacterEllipsis" />
                             <TextBlock x:Name="AccountNameText" Text="" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextBrush}" Margin="0,2,0,0"
                                        TextTrimming="CharacterEllipsis" />
@@ -332,6 +336,18 @@
 
                         <Button x:Name="LogoutButton" Grid.Column="2" Content="退出" VerticalAlignment="Center"
                                 Style="{StaticResource GhostButton}" Click="LogoutButton_Click" />
+
+                        <!-- Skin-site notices: full width so the text wraps instead of being cut off. -->
+                        <Border x:Name="AccountNotice" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,12,0,0" Padding="10,7"
+                                CornerRadius="6" Background="{DynamicResource AccentSoftBrush}" Visibility="Collapsed"
+                                ToolTipService.InitialShowDelay="200" ToolTipService.ShowDuration="30000" Cursor="Help">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Left" Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="0,1,8,0"
+                                           VerticalAlignment="Top" Foreground="{DynamicResource AccentBrush}" />
+                                <TextBlock x:Name="AccountNoticeText" FontSize="12" TextWrapping="Wrap" LineHeight="18"
+                                           Foreground="{DynamicResource AccentBrush}" />
+                            </DockPanel>
+                        </Border>
                     </Grid>
                 </Border>
             </Grid>
@@ -623,7 +639,7 @@
                                                 <Button Content="打开目录" MinWidth="90" Margin="10,0,0,0"
                                                         Style="{StaticResource SecondaryButton}"
                                                         Click="OpenInstanceDirButton_Click" />
-                                                <Button Content="实例设置" MinWidth="90" Margin="10,0,0,0"
+                                                <Button Content="实例管理" MinWidth="90" Margin="10,0,0,0"
                                                         Style="{StaticResource SecondaryButton}" Click="InstanceSettings_Click" />
                                             </StackPanel>
 
@@ -658,7 +674,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <Border Background="{DynamicResource SidebarBrush}" CornerRadius="6" Padding="4,2" Margin="28,18,28,0" HorizontalAlignment="Left">
                     <StackPanel Orientation="Horizontal">
-                        <Button x:Name="RuntimeTab" Content="游戏设置" Tag="Runtime" Style="{StaticResource NavItemActive}" Click="SettingsTab_Click" />
+                        <Button x:Name="RuntimeTab" Content="全局游戏设置" Tag="Runtime" Style="{StaticResource NavItemActive}" Click="SettingsTab_Click" />
                         <Button x:Name="AppearanceTab" Content="外观" Tag="Appearance" Margin="8,2" Style="{StaticResource NavItem}" Click="SettingsTab_Click" />
                         <Button x:Name="ProxyTab" Content="代理" Tag="Proxy" Margin="0,2,8,2" Style="{StaticResource NavItem}" Click="SettingsTab_Click" />
                         <Button x:Name="StorageTab" Content="游戏目录" Tag="Storage" Style="{StaticResource NavItem}" Click="SettingsTab_Click" />
@@ -668,53 +684,12 @@
                     <ScrollViewer x:Name="SettingsContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="28,18" MaxWidth="900" HorizontalAlignment="Stretch">
 
-                        <!-- Java -->
-                        <Border x:Name="JavaCard" Style="{StaticResource SettingsCard}">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE756;" Style="{StaticResource SectionIcon}" />
-                                    <StackPanel>
-                                        <TextBlock Text="游戏 Java" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="选择运行游戏所用的 Java。" Style="{StaticResource Caption}"
-                                                   Margin="0,2,0,0" />
-                                    </StackPanel>
-                                </StackPanel>
-
-                                <WrapPanel>
-                                <RadioButton x:Name="JavaAutoRadio" Content="自动选择合适的 Java" GroupName="JavaMode" Checked="JavaMode_Checked" Margin="0,0,24,0" />
-                                <RadioButton x:Name="JavaManualRadio" Content="自定义" GroupName="JavaMode" Checked="JavaMode_Checked" />
-                                </WrapPanel>
-                                <Grid Margin="0,14,0,8">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                    <ComboBox x:Name="JavaCandidatesCombo" DisplayMemberPath="DisplayName" SelectionChanged="JavaCandidate_SelectionChanged" Margin="0,0,8,0" ToolTip="选择 Java 版本；启动时检查兼容性。" />
-                                    <TextBlock Text="选择 Java" Margin="12,0,36,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource MutedTextBrush}">
-                                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding SelectedIndex, ElementName=JavaCandidatesCombo}" Value="-1"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-                                    </TextBlock>
-                                    <Button x:Name="ScanJavaButton" Grid.Column="1" Content="刷新" Style="{StaticResource SecondaryButton}" Click="ScanJava_Click" />
-                                </Grid>
-                                <TextBlock x:Name="JavaScanStatus" Style="{StaticResource Caption}" Text="检测本机 Java 后，可查看版本、架构与路径。" />
-                                <Grid x:Name="JavaPathRow" Margin="0,12,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="JavaPathTextBox" Grid.Column="0" Margin="0,0,8,0"
-                                             TextChanged="JavaPathTextBox_TextChanged" />
-                                    <Button x:Name="BrowseJavaButton" Grid.Column="1" Content="浏览…" MinWidth="80"
-                                            Style="{StaticResource SecondaryButton}"
-                                            Click="BrowseJavaButton_Click" />
-                                </Grid>
-                                <TextBlock x:Name="JavaDetectedText" FontSize="12" Foreground="{DynamicResource MutedTextBrush}"
-                                           Margin="0,10,0,0" TextWrapping="Wrap" />
-                                <TextBlock x:Name="JavaErrorText" FontSize="12" Foreground="{DynamicResource ErrorBrush}"
-                                           Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
+                        <ContentControl x:Name="GameDefaultsCard" HorizontalContentAlignment="Stretch" />
 
                         <Border x:Name="ProxyCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <TextBlock Text="代理" Style="{StaticResource SectionHeader}" />
-                                <TextBlock Text="用于启动器登录、下载、更新及网络背景。" Style="{StaticResource FieldHint}" Margin="0,4,0,18" />
+                                <TextBlock Text="仅用于启动器，不影响游戏连接。" Style="{StaticResource FieldHint}" Margin="0,4,0,18" />
                                 <ComboBox x:Name="ProxyModeCombo" Width="230" HorizontalAlignment="Left" SelectionChanged="ProxyMode_Changed">
                                     <ComboBoxItem Content="使用系统代理" /><ComboBoxItem Content="不使用代理" /><ComboBoxItem Content="HTTP" /><ComboBoxItem Content="SOCKS5" />
                                 </ComboBox>
@@ -725,7 +700,7 @@
                                         <TextBlock Text="主机" Style="{StaticResource FieldLabel}" Margin="0,0,0,8" />
                                         <TextBlock Text="端口" Grid.Column="2" Style="{StaticResource FieldLabel}" Margin="0,0,0,8" />
                                         <TextBox x:Name="ProxyHostTextBox" Grid.Row="1" TextChanged="ProxyField_Changed" />
-                                        <TextBox x:Name="ProxyPortTextBox" Grid.Row="1" Grid.Column="2" TextChanged="ProxyField_Changed" PreviewTextInput="MemoryTextBox_PreviewTextInput" />
+                                        <TextBox x:Name="ProxyPortTextBox" Grid.Row="1" Grid.Column="2" TextChanged="ProxyField_Changed" PreviewTextInput="DigitsOnly_PreviewTextInput" />
                                     </Grid>
                                     <CheckBox x:Name="ProxyAuthenticationCheck" Content="身份验证" Margin="0,22,0,14" Checked="ProxyAuthentication_Changed" Unchecked="ProxyAuthentication_Changed" />
                                     <Grid x:Name="ProxyCredentialsPanel">
@@ -738,53 +713,14 @@
                                     </Grid>
                                 </StackPanel>
                                 <TextBlock x:Name="ProxyErrorText" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,12,0,0" />
-                                <Border Height="1" Background="{DynamicResource PanelBorderBrush}" Margin="0,12,0,16" />
-                                <TextBlock Text="修改后自动保存，新请求使用新的代理设置；正在进行的下载不受影响。" Style="{StaticResource FieldHint}" />
-                                <TextBlock Text="此设置不改变 Minecraft 游戏内连接，也不能绕过系统 VPN 或 TUN。" Style="{StaticResource FieldHint}" />
                             </StackPanel>
                         </Border>
-
-                        <!-- Memory -->
-                        <Border x:Name="MemoryCard" Style="{StaticResource SettingsCard}">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE950;" Style="{StaticResource SectionIcon}" />
-                                    <StackPanel>
-                                        <TextBlock Text="游戏内存" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="设置分配给游戏的最大内存。" Style="{StaticResource Caption}"
-                                                   Margin="0,2,0,0" />
-                                    </StackPanel>
-                                </StackPanel>
-
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                    <RadioButton x:Name="MemoryAutoRadio" Content="自动分配内存" GroupName="MemoryMode" Checked="MemoryMode_Changed" />
-                                    <RadioButton x:Name="MemoryManualRadio" Content="手动选择内存" GroupName="MemoryMode" Checked="MemoryMode_Changed" Margin="24,0,0,0" />
-                                </StackPanel>
-                                <TextBlock x:Name="SystemMemoryText" FontSize="12" Foreground="{DynamicResource MutedTextBrush}" />
-                                <Grid Margin="0,10,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="MemoryTextBox" Grid.Column="0" Width="140"
-                                             TextChanged="MemoryTextBox_Changed" PreviewTextInput="MemoryTextBox_PreviewTextInput" />
-                                    <TextBlock Grid.Column="1" Text="MiB" Foreground="{DynamicResource MutedTextBrush}"
-                                               FontSize="13" VerticalAlignment="Center" Margin="10,0,0,0" />
-                                </Grid>
-                                <Slider x:Name="MemorySlider" Minimum="512" Maximum="32768" TickFrequency="256" IsSnapToTickEnabled="True" Margin="0,16,0,10" ValueChanged="MemorySlider_Changed" />
-                                <ProgressBar x:Name="MemoryUsageBar" Height="8" Maximum="100" />
-                                <TextBlock x:Name="MemoryAdviceText" Style="{StaticResource FieldHint}" />
-                                <TextBlock x:Name="MemoryErrorText" FontSize="12" Foreground="{DynamicResource ErrorBrush}"
-                                           Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-
 
                         <Border x:Name="AppearanceCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="230" /></Grid.ColumnDefinitions>
-                                    <StackPanel VerticalAlignment="Center"><TextBlock Text="主题模式" Style="{StaticResource SectionHeader}" /><TextBlock Text="选择启动器的浅色或深色外观。" Style="{StaticResource FieldHint}" /></StackPanel>
+                                    <StackPanel VerticalAlignment="Center"><TextBlock Text="主题模式" Style="{StaticResource SectionHeader}" /></StackPanel>
                                     <ComboBox x:Name="ThemeCombo" Grid.Column="1" SelectionChanged="Appearance_Changed">
                                         <ComboBoxItem Content="跟随系统设置" /><ComboBoxItem Content="浅色模式" /><ComboBoxItem Content="深色模式" />
                                     </ComboBox>
@@ -815,7 +751,6 @@
                                 <StackPanel x:Name="NetworkBackgroundPanel" Margin="0,18,0,0" Visibility="Collapsed">
                                     <TextBlock Text="图片地址" Style="{StaticResource FieldLabel}" Margin="0,0,0,8" />
                                     <TextBox x:Name="BackgroundUrlTextBox" TextChanged="BackgroundUrl_Changed" />
-                                    <TextBlock Text="支持图片链接和直接返回图片的 API，例如 https://acg.neko-arc.top/api.php" Style="{StaticResource FieldHint}" />
                                     <TextBlock x:Name="BackgroundUrlError" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel x:Name="BackgroundRotationPanel" Visibility="Collapsed">
@@ -831,7 +766,7 @@
                                     </WrapPanel>
                                     <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Text="切换间隔（秒）" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                        <TextBox x:Name="BackgroundIntervalTextBox" Grid.Column="1" TextChanged="BackgroundInterval_Changed" PreviewTextInput="MemoryTextBox_PreviewTextInput" />
+                                        <TextBox x:Name="BackgroundIntervalTextBox" Grid.Column="1" TextChanged="BackgroundInterval_Changed" PreviewTextInput="DigitsOnly_PreviewTextInput" />
                                         <Button Grid.Column="3" Content="切换背景图片" Style="{StaticResource SecondaryButton}" Click="NextBackground_Click" />
                                     </Grid>
                                     <TextBlock x:Name="BackgroundIntervalError" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
@@ -844,10 +779,9 @@
                         <Border x:Name="IsolationCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE8F1;" Style="{StaticResource SectionIcon}" />
                                     <StackPanel>
                                         <TextBlock Text="版本隔离" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="控制实例是否使用独立的游戏目录" Style="{StaticResource Caption}"
+                                        <TextBlock Text="选择实例是否共用游戏目录。" Style="{StaticResource Caption}"
                                                    Margin="0,2,0,0" />
                                     </StackPanel>
                                 </StackPanel>
@@ -856,7 +790,7 @@
                                           SelectionChanged="IsolationComboBox_SelectionChanged" />
                                 <TextBlock x:Name="IsolationHintText" FontSize="12" Foreground="{DynamicResource MutedTextBrush}"
                                            Margin="0,10,0,0" TextWrapping="Wrap" />
-                                <TextBlock Text="提示：更改版本隔离后，已有世界/配置不会自动迁移；模组实例 = 加载器非空且非原版。" FontSize="12"
+                                <TextBlock Text="更改隔离方式不会迁移已有存档和设置。" FontSize="12"
                                            Foreground="{DynamicResource AccentBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
@@ -865,11 +799,8 @@
                         <Border x:Name="DirectoryCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE80F;" Style="{StaticResource SectionIcon}" />
                                     <StackPanel>
                                         <TextBlock Text="启动器目录" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="启动器自身的工作目录（只读）" Style="{StaticResource Caption}"
-                                                   Margin="0,2,0,0" />
                                     </StackPanel>
                                 </StackPanel>
 
@@ -887,10 +818,9 @@
                         <Border x:Name="InstanceDirectoryCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE8B7;" Style="{StaticResource SectionIcon}" />
                                     <StackPanel>
                                         <TextBlock Text="游戏目录" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="已安装实例的存放目录，更改后将自动迁移" Style="{StaticResource Caption}"
+                                        <TextBlock Text="更改位置将迁移已有实例。" Style="{StaticResource Caption}"
                                                    Margin="0,2,0,0" />
                                     </StackPanel>
                                 </StackPanel>
@@ -915,8 +845,6 @@
                                         HorizontalAlignment="Left" Margin="0,12,0,0"
                                         Style="{StaticResource SecondaryButton}"
                                         Click="OpenInstancesButton_Click" />
-                                <TextBlock Text="提示：更改存放位置后，已有实例将被迁移；出现名称冲突时可手动重命名，未处理时自动追加 -2、(2) 等后缀。" FontSize="12"
-                                           Foreground="{DynamicResource AccentBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 
@@ -924,17 +852,14 @@
                         <Border x:Name="PackUpdateCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                    <TextBlock Text="&#xE896;" Style="{StaticResource SectionIcon}" />
                                     <StackPanel>
                                         <TextBlock Text="启动前自动更新整合包" Style="{StaticResource SectionHeader}" />
-                                        <TextBlock Text="启动服务器整合包实例前检查并下载新 revision；关闭后直接启动已安装版本。" Style="{StaticResource Caption}"
+                                        <TextBlock Text="关闭后直接启动已安装版本。" Style="{StaticResource Caption}"
                                                    Margin="0,2,0,0" />
                                     </StackPanel>
                                 </StackPanel>
 
                                 <CheckBox x:Name="AutoUpdatePacksCheck" Checked="AutoUpdatePacks_Changed" Unchecked="AutoUpdatePacks_Changed" Content="启用自动更新" IsChecked="True" />
-                                <TextBlock Text="关闭后可在资源站离线或更新失败时直接启动旧版本。" FontSize="12"
-                                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 

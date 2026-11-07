@@ -126,7 +126,9 @@ namespace CMUmcl.Community
         public ICommand PreviousPageCommand { get; }
         public ICommand NextPageCommand { get; }
         public string PageLabel => $"第 {_page + 1} 页";
-        public string ResultSummary => $"本页 {Results.Count} 项资源";
+        public string ResultSummary => IsLoading && Results.Count > 0 ? $"本页 {Results.Count} 项资源 · 正在加载其他来源…" : $"本页 {Results.Count} 项资源";
+        /// <summary>The large spinner only covers an empty list; partial results stay visible.</summary>
+        public bool ShowLoadingOverlay => IsLoading && Results.Count == 0;
         private bool _isDetailPage;
         public bool IsDetailPage { get => _isDetailPage; private set { if (Set(ref _isDetailPage, value)) OnPropertyChanged(nameof(ShowResults)); } }
         public bool ShowResults => !IsDetailPage;
@@ -185,7 +187,7 @@ namespace CMUmcl.Community
         public bool OnlyCompatible { get => _onlyCompatible; set => Set(ref _onlyCompatible, value); }
 
         private bool _isLoading;
-        public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { OnPropertyChanged(nameof(HasEmptyMessage)); foreach (var command in new[] { SearchCommand, FirstPageCommand, PreviousPageCommand, NextPageCommand }) (command as RelayCommand)?.RaiseCanExecuteChanged(); } } }
+        public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { OnPropertyChanged(nameof(HasEmptyMessage)); OnPropertyChanged(nameof(ShowLoadingOverlay)); OnPropertyChanged(nameof(ResultSummary)); foreach (var command in new[] { SearchCommand, FirstPageCommand, PreviousPageCommand, NextPageCommand }) (command as RelayCommand)?.RaiseCanExecuteChanged(); } } }
 
         private string _emptyMessage = "输入关键字或选择分类开始搜索";
         public string EmptyMessage { get => _emptyMessage; private set { if (Set(ref _emptyMessage, value)) OnPropertyChanged(nameof(HasEmptyMessage)); } }
@@ -269,21 +271,40 @@ namespace CMUmcl.Community
                     PageSize = 50,
                 };
                 ResourceTarget? target = Kind==ResourceKind.Modpack?null:SelectedTarget;
-                CatalogPage page = await _catalog.SearchAsync(query, target?.Loader, target?.Game, CancellationToken.None).ConfigureAwait(true);
+                var cards = new Dictionary<(ResourceSourceId, string), ResourceCardViewModel>();
+                // Shows whatever has arrived; cards are reused so their icons are not fetched twice.
+                void Show(IReadOnlyList<ResourceProject> projects)
+                {
+                    if (request != _searchRequest) return;
+                    var next = new List<ResourceCardViewModel>();
+                    foreach (ResourceProject p in projects)
+                    {
+                        CompatibilityHint hint = target == null
+                            ? CompatibilityHint.Unknown
+                            : CompatibilityEvaluator.ProjectHint(p, Kind, target.Loader, target.Game);
+                        if (OnlyCompatible && target != null && hint == CompatibilityHint.Incompatible) continue;
+                        if (!cards.TryGetValue((p.Source, p.Id), out var card))
+                        {
+                            card = new ResourceCardViewModel(p, hint, Kind!=ResourceKind.Modpack);
+                            cards[(p.Source, p.Id)] = card;
+                            _ = LoadCardIconAsync(card);
+                        }
+                        next.Add(card);
+                    }
+                    if (next.SequenceEqual(Results)) return;
+                    Results.Clear();
+                    foreach (var card in next) Results.Add(card);
+                    OnPropertyChanged(nameof(ResultSummary));
+                    OnPropertyChanged(nameof(ShowLoadingOverlay));
+                }
+                var ui = SynchronizationContext.Current;
+                Action<IReadOnlyList<ResourceProject>>? partial = ui == null ? null : projects => ui.Post(_ => Show(projects), null);
+                CatalogPage page = await _catalog.SearchAsync(query, target?.Loader, target?.Game, CancellationToken.None, partial).ConfigureAwait(true);
 
                 if (request != _searchRequest) return;
                 _page = Math.Max(0, pageIndex); _hasMore = page.HasMore;
                 OnPropertyChanged(nameof(PageLabel));
-                foreach (ResourceProject p in page.Projects)
-                {
-                    CompatibilityHint hint = target == null
-                        ? CompatibilityHint.Unknown
-                        : CompatibilityEvaluator.ProjectHint(p, Kind, target.Loader, target.Game);
-                    if (OnlyCompatible && target != null && hint == CompatibilityHint.Incompatible) continue;
-                    var card = new ResourceCardViewModel(p, hint, Kind!=ResourceKind.Modpack);
-                    Results.Add(card);
-                    _ = LoadCardIconAsync(card);
-                }
+                Show(page.Projects);
 
                 OnPropertyChanged(nameof(ResultSummary));
                 PartialMessage = BuildPartialMessage(page.Failures);
@@ -370,7 +391,7 @@ namespace CMUmcl.Community
                         : null);
                 if (kind == ResourceKind.Mod)
                     detail.ConfigureDependencies((dependency, ct) => _catalog.ResolveDependencyAsync(card.Project.Source, dependency, ct), _icons.LoadAsync);
-                detail.ConfirmOverwrite = path => MessageBox.Show(
+                detail.ConfirmOverwrite = path => LauncherPrompt.ShowForApp(
                     "文件已存在：\n" + path + "\n\n是否覆盖？", "确认覆盖", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
                 detail.InstallProgress = new Progress<CommunityInstallProgress>(detail.ReportProgress);
                 Detail = detail;
