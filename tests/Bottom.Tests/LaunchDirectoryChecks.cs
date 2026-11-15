@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.ProcessBuilder;
@@ -12,6 +13,7 @@ internal static partial class Program
     // A child process emulates mods which use relative config and log paths.
     private static int RelativeFilesProbe()
     {
+        Console.OutputEncoding = new UTF8Encoding(false);
         string value = File.ReadAllText(Path.Combine("config", "fancymenu", "customizablemenus.txt"));
         Directory.CreateDirectory("logs");
         File.WriteAllText(Path.Combine("logs", "relative-probe.log"), value);
@@ -66,6 +68,7 @@ internal static partial class Program
                 process.StartInfo.CreateNoWindow = true;
                 process.StartInfo.RedirectStandardOutput = true;
                 process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
                 process.Start();
                 var output = process.StandardOutput.ReadToEndAsync();
                 var errors = process.StandardError.ReadToEndAsync();
