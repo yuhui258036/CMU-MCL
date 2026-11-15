@@ -133,6 +133,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: "CMUmcl ${{ steps.version.outputs.version }}"
           fail_on_unmatched_files: true
           files: |
@@ -290,6 +291,18 @@ jobs:
             Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $knownPath -Force -ErrorAction SilentlyContinue
           }
+
+      - name: Verify published signed update
+        if: steps.check.outputs.ok == 'true'
+        shell: pwsh
+        run: |
+          $env:CMUMCL_CF_PRIVATE_BUILD_ROOT = ''
+          $env:CMUMCL_CF_BUILD_RESOURCE = ''
+          dotnet build tests/SchematicPreview.Tests/SchematicPreview.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Published update verifier build failed' }
+          & tests/SchematicPreview.Tests/bin/Release/net48/CMUmcl.SchematicPreview.Tests.exe --verify-published-client `
+            (Join-Path $env:RUNNER_TEMP 'published-update-proof') $env:VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Public update download, signature or version verification failed' }
 
       - name: Cleanup local keyed artifacts
         if: always()

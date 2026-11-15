@@ -1,0 +1,39 @@
+name: net48 publish request
+
+# A versioned release branch requests the existing, audited publication workflow.
+# This entry point handles no signing, deployment or CurseForge credentials.
+on:
+  create:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: net48-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  request-release:
+    if: github.ref_type == 'branch' && startsWith(github.ref_name, 'release/net48/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version and request signed publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#release/net48/}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Release branch must contain a four-part version.' >&2
+            exit 1
+          fi
+          project_version=$(python3 -c 'import xml.etree.ElementTree as E; print(E.parse("CMUmcl/CMUmcl.csproj").findtext("./PropertyGroup/Version"))')
+          if [[ "$version" != "$project_version" ]]; then
+            echo 'Release branch and client project versions must match.' >&2
+            exit 1
+          fi
+          gh workflow run net48-release.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            -f version="$version" -F publish_server=true
