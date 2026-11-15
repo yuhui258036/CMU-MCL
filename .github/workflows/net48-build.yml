@@ -1,0 +1,65 @@
+name: net48 build and tests
+
+on:
+  push:
+    branches: [net48]
+  pull_request:
+    branches: [net48]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: net48-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build and test launch and authentication paths
+        shell: pwsh
+        run: |
+          dotnet build tests/Bottom.Tests/Bottom.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Bottom build failed' }
+          & tests/Bottom.Tests/bin/Release/net48/CMUmcl.LauncherSettings.Tests.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Bottom tests failed' }
+
+      - name: Build and test resource downloads
+        shell: pwsh
+        run: |
+          dotnet build tests/ResourceDownload.Tests/ResourceDownload.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'ResourceDownload build failed' }
+          & tests/ResourceDownload.Tests/bin/Release/net48/CMUmcl.ResourceDownload.Tests.exe
+          if ($LASTEXITCODE -ne 0) { throw 'ResourceDownload tests failed' }
+
+      - name: Package public client
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content CMUmcl/CMUmcl.csproj -Raw
+          $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Client version is missing' }
+          $package = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package-net48-release.ps1 `
+            -Version $version -MainOutput CMUmcl/bin/Release/net48 `
+            -UpdaterOutput CMUmcl.Updater/bin/Release/net48 `
+            -OutputDirectory (Join-Path $env:RUNNER_TEMP 'public-package')
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($package)) { throw 'Public packaging failed' }
+
+      - name: Upload public build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CMUmcl-net48-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/public-package/*.zip
+            ${{ runner.temp }}/public-package/release-info.json
+          if-no-files-found: error
+          retention-days: 14

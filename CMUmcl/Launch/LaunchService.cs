@@ -234,7 +234,7 @@ namespace CMUmcl.Launch
 
                 // Build and start the process.
                 progress?.Report(new LaunchProgress { Stage = "启动", Message = "正在构建启动进程…" });
-                Process process = await prepared.Launcher.BuildProcessAsync(prepared.VersionName, option, ct).ConfigureAwait(false);
+                Process process = await BuildGameProcessAsync(prepared.Launcher, prepared.VersionName, option, gameDir, ct).ConfigureAwait(false);
 
                 GameProcessDiagnostics diagnostics = GameProcessDiagnostics.Prepare(process);
                 var sharing=await Task.Run(()=>InstanceSharing.Begin(gameDir,InstanceOptionsStore.Load(instanceDir).SharedSettings),ct);
@@ -283,6 +283,16 @@ namespace CMUmcl.Launch
                 JavaPath = prepared.Java.JavaPath,
                 JavaMajor = prepared.Java.Major,
             };
+        }
+
+        internal static async Task<Process> BuildGameProcessAsync(
+            MinecraftLauncher launcher, string versionName, MLaunchOption option, string gameDir, CancellationToken ct)
+        {
+            Process process = await launcher.BuildProcessAsync(versionName, option, ct).ConfigureAwait(false);
+            // Mods may resolve config/assets relative to user.dir rather than --gameDir.
+            // Keep relative paths inside the same directory as the instance's game files.
+            process.StartInfo.WorkingDirectory = gameDir;
+            return process;
         }
 
         internal static async Task<bool> WaitForOwnedGameAsync(Process process,CancellationToken ct,Func<string>? diagnostics=null)

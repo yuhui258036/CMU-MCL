@@ -25,6 +25,7 @@ dotnet build CMUmcl/CMUmcl.csproj -c Release
 ```powershell
 dotnet run --project tests/Community.Tests -c Release
 dotnet run --project tests/Bottom.Tests -c Release
+dotnet run --project tests/Bottom.Tests -c Release -- --launch-directory-only
 dotnet run --project tests/ResourceDownload.Tests -c Release
 dotnet build tests/LauncherSettings.Tests -c Release
 $source = (Get-Location).Path
